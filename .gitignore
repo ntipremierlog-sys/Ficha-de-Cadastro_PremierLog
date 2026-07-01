@@ -1,0 +1,11 @@
+# OS metadata files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Backup or editor temporary files
+*.tmp
+*.bak
+*~
+.vscode/
+.idea/
