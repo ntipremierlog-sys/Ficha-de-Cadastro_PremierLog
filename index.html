@@ -179,6 +179,7 @@
 
       const [token, setToken] = useState(null);
       const [vaga, setVaga] = useState('');
+      const hasHealthPlan = !token || vaga.includes('1268') || vaga.includes('158');
       const [isValidatingToken, setIsValidatingToken] = useState(true);
       const [tokenError, setTokenError] = useState(null);
       const [isFormSubmitted, setIsFormSubmitted] = useState(false);
@@ -628,112 +629,114 @@
           doc.text("Conforme art. 9º do Decreto nº 95.247/1987, o desconto referente ao VT é de até 6% do salário base do colaborador, descontado em folha mensalmente.", marginX, y);
           y += 12.0;
 
-          // 7. PLANO DE SAÚDE - SULAMÉRICA
-          drawSectionHeader("Plano de Saúde");
+          if (hasHealthPlan) {
+            // 7. PLANO DE SAÚDE - SULAMÉRICA
+            drawSectionHeader("Plano de Saúde");
 
-          if (typeof SULAMERICA_LOGO_BASE64 !== 'undefined') {
-            try {
-              doc.setFont("helvetica", "bold");
-              doc.setFontSize(9.5);
-              const textWidth = doc.getTextWidth("PLANO DE SAÚDE");
-              const logoHeight = 8.0; // mm
-              const logoWidth = 2.2533 * logoHeight; // Aspect ratio 338/150
-              const logoX = marginX + textWidth + 3.0;
-              doc.addImage(SULAMERICA_LOGO_BASE64, 'JPEG', logoX, y - 13.0, logoWidth, logoHeight);
-            } catch (err) {
-              console.error("Error drawing SulAmérica logo in PDF:", err);
+            if (typeof SULAMERICA_LOGO_BASE64 !== 'undefined') {
+              try {
+                doc.setFont("helvetica", "bold");
+                doc.setFontSize(9.5);
+                const textWidth = doc.getTextWidth("PLANO DE SAÚDE");
+                const logoHeight = 8.0; // mm
+                const logoWidth = 2.2533 * logoHeight; // Aspect ratio 338/150
+                const logoX = marginX + textWidth + 3.0;
+                doc.addImage(SULAMERICA_LOGO_BASE64, 'JPEG', logoX, y - 13.0, logoWidth, logoHeight);
+              } catch (err) {
+                console.error("Error drawing SulAmérica logo in PDF:", err);
+              }
             }
-          }
 
-          doc.setFont("helvetica", "bold");
-          doc.setFontSize(7.5);
-          doc.setTextColor(33, 21, 81);
-          doc.text("Acomodação: Ambulatorial e Hospitalar com Obstetrícia. | Característica: Coparticipação de até 50% sobre procedimentos.", marginX, y);
-          y += 4.5;
+            doc.setFont("helvetica", "bold");
+            doc.setFontSize(7.5);
+            doc.setTextColor(33, 21, 81);
+            doc.text("Acomodação: Ambulatorial e Hospitalar com Obstetrícia. | Característica: Coparticipação de até 50% sobre procedimentos.", marginX, y);
+            y += 4.5;
 
-          doc.setFont("helvetica", "italic");
-          doc.setFontSize(6.5);
-          doc.setTextColor(110, 120, 130);
-          const healthDetailText = "A mensalidade é assumida parcialmente pelo funcionário: 50% do valor da tabela conforme faixa etária, descontado em folha de pagamento. Em caso de inclusão de dependentes, o plano é custeado integralmente pelo titular. Reajustes anuais de mensalidade e coparticipação são repassados ao funcionário.";
-          const splitHealthText = doc.splitTextToSize(healthDetailText, printableWidth);
-          doc.text(splitHealthText, marginX, y);
-          y += splitHealthText.length * 3.0 + 3.0;
+            doc.setFont("helvetica", "italic");
+            doc.setFontSize(6.5);
+            doc.setTextColor(110, 120, 130);
+            const healthDetailText = "A mensalidade é assumida parcialmente pelo funcionário: 50% do valor da tabela conforme faixa etária, descontado em folha de pagamento. Em caso de inclusão de dependentes, o plano é custeado integralmente pelo titular. Reajustes anuais de mensalidade e coparticipação são repassados ao funcionário.";
+            const splitHealthText = doc.splitTextToSize(healthDetailText, printableWidth);
+            doc.text(splitHealthText, marginX, y);
+            y += splitHealthText.length * 3.0 + 3.0;
 
-          // Draw prices table dynamically
-          const tableStartY = y;
-          const colW = 18.6;
+            // Draw prices table dynamically
+            const tableStartY = y;
+            const colW = 18.6;
 
-          // Header Background
-          doc.setFillColor(33, 21, 81); // Pantone 274C
-          doc.rect(marginX, tableStartY, printableWidth, 5.0, "F");
+            // Header Background
+            doc.setFillColor(33, 21, 81); // Pantone 274C
+            doc.rect(marginX, tableStartY, printableWidth, 5.0, "F");
 
-          const ageHeaders = ["0 a 18", "19 a 23", "24 a 28", "29 a 33", "34 a 38", "39 a 43", "44 a 48", "49 a 53", "54 a 58", "59+"];
-          const agePrices = ["R$ 462,18", "R$ 577,73", "R$ 716,38", "R$ 795,18", "R$ 850,85", "R$ 986,98", "R$ 1.179,84", "R$ 1.382,76", "R$ 1.646,18", "R$ 2.773,00"];
+            const ageHeaders = ["0 a 18", "19 a 23", "24 a 28", "29 a 33", "34 a 38", "39 a 43", "44 a 48", "49 a 53", "54 a 58", "59+"];
+            const agePrices = ["R$ 462,18", "R$ 577,73", "R$ 716,38", "R$ 795,18", "R$ 850,85", "R$ 986,98", "R$ 1.179,84", "R$ 1.382,76", "R$ 1.646,18", "R$ 2.773,00"];
 
-          doc.setFont("helvetica", "bold");
-          doc.setFontSize(6.2);
-          doc.setTextColor(255, 255, 255);
-          for (let i = 0; i < 10; i++) {
-            doc.text(ageHeaders[i], marginX + i * colW + colW / 2, tableStartY + 3.5, { align: "center" });
-          }
+            doc.setFont("helvetica", "bold");
+            doc.setFontSize(6.2);
+            doc.setTextColor(255, 255, 255);
+            for (let i = 0; i < 10; i++) {
+              doc.text(ageHeaders[i], marginX + i * colW + colW / 2, tableStartY + 3.5, { align: "center" });
+            }
 
-          // Price Row Background
-          doc.setFillColor(245, 247, 250);
-          doc.rect(marginX, tableStartY + 5.0, printableWidth, 5.0, "F");
+            // Price Row Background
+            doc.setFillColor(245, 247, 250);
+            doc.rect(marginX, tableStartY + 5.0, printableWidth, 5.0, "F");
 
-          doc.setFont("helvetica", "normal");
-          doc.setFontSize(5.8);
-          doc.setTextColor(51, 65, 85);
-          for (let i = 0; i < 10; i++) {
-            doc.text(agePrices[i], marginX + i * colW + colW / 2, tableStartY + 5.0 + 3.5, { align: "center" });
-          }
+            doc.setFont("helvetica", "normal");
+            doc.setFontSize(5.8);
+            doc.setTextColor(51, 65, 85);
+            for (let i = 0; i < 10; i++) {
+              doc.text(agePrices[i], marginX + i * colW + colW / 2, tableStartY + 5.0 + 3.5, { align: "center" });
+            }
 
-          // Table Borders
-          doc.setDrawColor(180, 190, 200);
-          doc.setLineWidth(0.15);
-          doc.rect(marginX, tableStartY, printableWidth, 10.0);
-          doc.line(marginX, tableStartY + 5.0, marginX + printableWidth, tableStartY + 5.0);
-          for (let i = 1; i < 10; i++) {
-            doc.line(marginX + i * colW, tableStartY, marginX + i * colW, tableStartY + 10.0);
-          }
+            // Table Borders
+            doc.setDrawColor(180, 190, 200);
+            doc.setLineWidth(0.15);
+            doc.rect(marginX, tableStartY, printableWidth, 10.0);
+            doc.line(marginX, tableStartY + 5.0, marginX + printableWidth, tableStartY + 5.0);
+            for (let i = 1; i < 10; i++) {
+              doc.line(marginX + i * colW, tableStartY, marginX + i * colW, tableStartY + 10.0);
+            }
 
-          y += 15.0;
+            y += 15.0;
 
-          // Chosen Health Plan Option
-          doc.setFont("helvetica", "bold");
-          doc.setFontSize(7.0);
-          doc.setTextColor(33, 21, 81);
-          doc.text("OPÇÃO ASSINALADA:", marginX, y);
-          y += 4.5;
+            // Chosen Health Plan Option
+            doc.setFont("helvetica", "bold");
+            doc.setFontSize(7.0);
+            doc.setTextColor(33, 21, 81);
+            doc.text("OPÇÃO ASSINALADA:", marginX, y);
+            y += 4.5;
 
-          doc.setFont("helvetica", "normal");
-          doc.setFontSize(7.2);
-          doc.setTextColor(31, 41, 55);
+            doc.setFont("helvetica", "normal");
+            doc.setFontSize(7.2);
+            doc.setTextColor(31, 41, 55);
 
-          let optionText = '';
-          if (formData.planoSaudeOpcao === 'a') {
-            optionText = "[ X ] Não tenho interesse no plano de saúde.";
-          } else if (formData.planoSaudeOpcao === 'b') {
-            optionText = "[ X ] Opto pelo plano de saúde individual, e autorizo o empregador a descontar mensalmente em folha de pagamento os valores de mensalidade e coparticipação.";
-          } else {
-            optionText = "[ X ] Opto pelo plano de saúde com inclusão de dependente(s), e autorizo o empregador a descontar mensalmente em folha de pagamento os valores correspondentes de mensalidade e coparticipação.";
-          }
+            let optionText = '';
+            if (formData.planoSaudeOpcao === 'a') {
+              optionText = "[ X ] Não tenho interesse no plano de saúde.";
+            } else if (formData.planoSaudeOpcao === 'b') {
+              optionText = "[ X ] Opto pelo plano de saúde individual, e autorizo o empregador a descontar mensalmente em folha de pagamento os valores de mensalidade e coparticipação.";
+            } else {
+              optionText = "[ X ] Opto pelo plano de saúde com inclusão de dependente(s), e autorizo o empregador a descontar mensalmente em folha de pagamento os valores correspondentes de mensalidade e coparticipação.";
+            }
 
-          const splitOptText = doc.splitTextToSize(optionText, printableWidth);
-          doc.text(splitOptText, marginX, y);
-          y += splitOptText.length * 3.5 + 3.0;
+            const splitOptText = doc.splitTextToSize(optionText, printableWidth);
+            doc.text(splitOptText, marginX, y);
+            y += splitOptText.length * 3.5 + 3.0;
 
-          // Dependents Block in PDF
-          if (formData.planoSaudeOpcao === 'c') {
-            drawField("DEPENDENTE 01 (NOME)", formData.dependente1Nome || 'Não informado', marginX, 100);
-            drawField("CPF DO DEPENDENTE 01", formData.dependente1Cpf || 'Não informado', marginX + 104, 82);
-            y += 10.0;
+            // Dependents Block in PDF
+            if (formData.planoSaudeOpcao === 'c') {
+              drawField("DEPENDENTE 01 (NOME)", formData.dependente1Nome || 'Não informado', marginX, 100);
+              drawField("CPF DO DEPENDENTE 01", formData.dependente1Cpf || 'Não informado', marginX + 104, 82);
+              y += 10.0;
 
-            drawField("DEPENDENTE 02 (NOME)", formData.dependente2Nome || 'Não informado', marginX, 100);
-            drawField("CPF DO DEPENDENTE 02", formData.dependente2Cpf || 'Não informado', marginX + 104, 82);
-            y += 13.0;
-          } else {
-            y += 3.0;
+              drawField("DEPENDENTE 02 (NOME)", formData.dependente2Nome || 'Não informado', marginX, 100);
+              drawField("CPF DO DEPENDENTE 02", formData.dependente2Cpf || 'Não informado', marginX + 104, 82);
+              y += 13.0;
+            } else {
+              y += 3.0;
+            }
           }
 
           // 8. DECLARAÇÃO FINAL
@@ -1481,8 +1484,9 @@
             </div>
 
             {/* SECTION 6: PLANO DE SAÚDE - SULAMÉRICA */}
-            <div className="space-y-6">
-              <div className="flex items-center gap-3 border-b border-slate-100 pb-3">
+            {hasHealthPlan && (
+              <div className="space-y-6">
+                <div className="flex items-center gap-3 border-b border-slate-100 pb-3">
                 <div className="w-8 h-8 rounded-lg bg-premier-blue/10 flex items-center justify-center text-premier-blue font-bold text-sm">06</div>
                 <h2 className="text-lg font-bold text-premier-blue">Plano de Saúde</h2>
                 <img
@@ -1649,11 +1653,12 @@
                 )}
               </div>
             </div>
+            )}
 
             {/* SECTION 7: DECLARAÇÃO FINAL */}
             <div className="space-y-6">
               <div className="flex items-center gap-3 border-b border-slate-100 pb-3">
-                <div className="w-8 h-8 rounded-lg bg-premier-blue/10 flex items-center justify-center text-premier-blue font-bold text-sm">07</div>
+                <div className="w-8 h-8 rounded-lg bg-premier-blue/10 flex items-center justify-center text-premier-blue font-bold text-sm">{hasHealthPlan ? "07" : "06"}</div>
                 <h2 className="text-lg font-bold text-premier-blue">Declaração Final</h2>
               </div>
 
