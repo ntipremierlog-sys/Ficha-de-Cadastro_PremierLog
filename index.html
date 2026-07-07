@@ -935,7 +935,7 @@
             <div className="flex flex-col md:flex-row items-center justify-between gap-6 relative z-10">
               <div className="flex flex-col md:flex-row items-center gap-6 w-full">
                 {LOGO_BASE64 && (
-                  <div className="bg-white px-4 py-2 shrink-0 rounded-xl overflow-hidden shadow-lg h-[88px] md:h-[109px] flex items-center justify-center">
+                  <div className="bg-white px-4 py-2 shrink-0 rounded-xl overflow-hidden shadow-lg h-[170px] md:h-[213px] flex items-center justify-center">
                     <img src={LOGO_BASE64} alt="Premier Logistics Logo" className="h-full w-auto object-contain" />
                   </div>
                 )}
@@ -1026,13 +1026,13 @@
                   />
                 </div>
 
-                <div className="md:col-span-2">
-                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Endereço Residencial *</label>
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">CEP</label>
                   <input
                     type="text"
-                    value={formData.endereco}
-                    onChange={(e) => handleInputChange('endereco', e.target.value)}
-                    placeholder="Rua, Número, Complemento"
+                    value={formData.cep}
+                    onChange={(e) => handleInputChange('cep', e.target.value, formatCEP)}
+                    placeholder="00000-000"
                     className="w-full"
                   />
                 </div>
@@ -1048,13 +1048,13 @@
                   />
                 </div>
 
-                <div>
-                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">CEP</label>
+                <div className="md:col-span-2">
+                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Endereço Residencial *</label>
                   <input
                     type="text"
-                    value={formData.cep}
-                    onChange={(e) => handleInputChange('cep', e.target.value, formatCEP)}
-                    placeholder="00000-000"
+                    value={formData.endereco}
+                    onChange={(e) => handleInputChange('endereco', e.target.value)}
+                    placeholder="Rua, Número, Complemento"
                     className="w-full"
                   />
                 </div>
