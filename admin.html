@@ -512,6 +512,7 @@
       box-shadow: var(--shadow-lg); width: 100%;
       transform: translateY(16px) scale(.97);
       transition: transform .22s;
+      max-height: 85vh; display: flex; flex-direction: column;
     }
     .modal-overlay.open .modal { transform: none; }
     .modal-header {
@@ -526,7 +527,7 @@
       transition: background .15s;
     }
     .btn-close:hover { background: var(--border); }
-    .modal-body { padding: 26px; }
+    .modal-body { padding: 26px; overflow-y: auto; }
     .modal-footer {
       padding: 16px 26px; border-top: 1px solid var(--border);
       display: flex; justify-content: flex-end; gap: 10px;
@@ -612,8 +613,7 @@
       letter-spacing: .6px; color: var(--navy); padding-bottom: 8px;
       border-bottom: 2px solid var(--gold); margin-bottom: 14px;
     }
-    #detailsModal .modal { max-width: 680px; max-height: 85vh; display: flex; flex-direction: column; }
-    #detailsModal .modal-body { overflow-y: auto; }
+    #detailsModal .modal { max-width: 680px; }
 
     /* Confirm modal */
     #confirmModal .modal { max-width: 380px; }
