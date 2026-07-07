@@ -885,6 +885,18 @@
         <label class="form-label" for="inputVaga">Vaga / Cargo *</label>
         <input class="form-input" id="inputVaga" type="text" placeholder="Ex: Auxiliar Logístico" />
       </div>
+      <div class="form-group">
+        <label class="form-label" for="selectContrato">Contrato *</label>
+        <select class="form-input" id="selectContrato" style="padding: 10px; border-radius: 8px; border: 1.5px solid var(--border); font-size: 13.5px; width: 100%; font-family: inherit; color: var(--text); background: white;">
+          <option value="">Selecione um contrato...</option>
+          <option value="206 - CAJAMAR">206 - CAJAMAR</option>
+          <option value="206 - RODOANEL">206 - RODOANEL</option>
+          <option value="1268 - SALVADOR">1268 - SALVADOR</option>
+          <option value="158 - TECA SALVADOR">158 - TECA SALVADOR</option>
+          <option value="778 - GUARULHOS">778 - GUARULHOS</option>
+          <option value="618 - INDAIATUBA">618 - INDAIATUBA</option>
+        </select>
+      </div>
       <label class="form-check" id="emailCheck">
         <input type="checkbox" id="checkSendEmail" checked />
         <span class="form-check-label">📧 Enviar e-mail de convite automaticamente</span>
@@ -1333,6 +1345,7 @@ function openAddModal() {
   document.getElementById('inputNome').value = '';
   document.getElementById('inputEmail').value = '';
   document.getElementById('inputVaga').value = '';
+  document.getElementById('selectContrato').value = '';
   document.getElementById('checkSendEmail').checked = true;
   document.getElementById('successLinkBox').style.display = 'none';
   document.getElementById('addModalFooter').style.display = 'flex';
@@ -1345,11 +1358,14 @@ let lastGenToken = '';
 async function saveCandidate() {
   const nome  = document.getElementById('inputNome').value.trim();
   const email = document.getElementById('inputEmail').value.trim();
-  const vaga  = document.getElementById('inputVaga').value.trim();
+  const cargo = document.getElementById('inputVaga').value.trim();
+  const contrato = document.getElementById('selectContrato').value;
   const send  = document.getElementById('checkSendEmail').checked;
 
-  if (!nome || !email || !vaga) { showToast('Preencha todos os campos obrigatórios.', 'warning'); return; }
+  if (!nome || !email || !cargo || !contrato) { showToast('Preencha todos os campos obrigatórios.', 'warning'); return; }
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { showToast('E-mail inválido.', 'warning'); return; }
+
+  const vaga = cargo + ' - ' + contrato;
 
   const btn = document.getElementById('btnSaveCandidate');
   btn.disabled = true;
