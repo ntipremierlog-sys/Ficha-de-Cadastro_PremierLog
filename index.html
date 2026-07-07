@@ -66,6 +66,8 @@
 
   <!-- React code -->
   <script type="text/babel">
+    const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyEHKdUDWhXUD2n8S0_7Gl2lCtizGqj9gAICVJS6_en_OFl_sRzLMQJRr5trqHnWzK3tQ/exec';
+
     const { useState, useEffect, useRef } = React;
 
     // Embed base64 logo string
@@ -174,6 +176,97 @@
       const canvasRef = useRef(null);
       const [isDrawing, setIsDrawing] = useState(false);
       const [hasSigned, setHasSigned] = useState(false);
+
+      const [token, setToken] = useState(null);
+      const [vaga, setVaga] = useState('');
+      const [isValidatingToken, setIsValidatingToken] = useState(true);
+      const [tokenError, setTokenError] = useState(null);
+      const [isFormSubmitted, setIsFormSubmitted] = useState(false);
+
+      useEffect(() => {
+        const urlParams = new URLSearchParams(window.location.search);
+        let tokenParam = urlParams.get('token');
+        
+        // Fallback: check hash parameters
+        if (!tokenParam && window.location.hash) {
+          const hashParams = new URLSearchParams(window.location.hash.substring(1));
+          tokenParam = hashParams.get('token');
+        }
+        
+        if (!tokenParam) {
+          if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+            setIsValidatingToken(false);
+          } else {
+            setTokenError("Acesso restrito. A Ficha de Cadastro de Admissão da Premier Logistics só pode ser acessada através do link pessoal fornecido pelo RH.");
+            setIsValidatingToken(false);
+          }
+          return;
+        }
+
+        setToken(tokenParam);
+
+        if (APPS_SCRIPT_URL === 'COLE_A_URL_DO_APPS_SCRIPT_AQUI') {
+          setIsValidatingToken(false);
+          return;
+        }
+
+        fetch(`${APPS_SCRIPT_URL}?action=validateToken&token=${tokenParam}`)
+          .then(res => res.json())
+          .then(data => {
+            if (data.valid) {
+              setVaga(data.vaga || '');
+              if (data.nome) {
+                setFormData(prev => ({ ...prev, nomeCompleto: data.nome }));
+              }
+              setIsValidatingToken(false);
+            } else {
+              setTokenError(data.message || 'Link inválido ou expirado. Por favor, solicite um novo ao RH.');
+              setIsValidatingToken(false);
+            }
+          })
+          .catch(err => {
+            console.error("Erro ao validar token:", err);
+            setTokenError("Erro de conexão com o servidor de validação. Por favor, tente novamente mais tarde.");
+            setIsValidatingToken(false);
+          });
+      }, []);
+
+      useEffect(() => {
+        const cleanCep = (formData.cep || '').replace(/\D/g, '');
+        if (cleanCep.length === 8) {
+          fetch(`https://viacep.com.br/ws/${cleanCep}/json/`)
+            .then(res => res.json())
+            .then(data => {
+              if (!data.erro) {
+                setFormData(prev => {
+                  let newEndereco = prev.endereco;
+                  if (data.logradouro) {
+                    newEndereco = data.logradouro;
+                  }
+                  
+                  let newBairroCidade = prev.bairroCidade;
+                  const parts = [];
+                  if (data.bairro) parts.push(data.bairro);
+                  if (data.localidade) {
+                    let cityState = data.localidade;
+                    if (data.uf) cityState += ` - ${data.uf}`;
+                    parts.push(cityState);
+                  }
+                  if (parts.length > 0) {
+                    newBairroCidade = parts.join(' / ');
+                  }
+                  
+                  return {
+                    ...prev,
+                    endereco: newEndereco,
+                    bairroCidade: newBairroCidade
+                  };
+                });
+              }
+            })
+            .catch(err => console.error("Erro ao buscar CEP:", err));
+        }
+      }, [formData.cep]);
 
       const startDrawing = (e) => {
         const canvas = canvasRef.current;
@@ -358,6 +451,31 @@
 
         setIsGenerating(true);
         setSuccessMessage(null);
+
+        // Enviar os dados ao Google Sheets antes de gerar/salvar o PDF
+        if (token && APPS_SCRIPT_URL !== 'COLE_A_URL_DO_APPS_SCRIPT_AQUI') {
+          try {
+            const submitResponse = await fetch(APPS_SCRIPT_URL, {
+              method: 'POST',
+              body: JSON.stringify({
+                action: 'submitForm',
+                token: token,
+                formData: formData
+              })
+            });
+            const submitResult = await submitResponse.json();
+            if (submitResult.error) {
+              setErrors({ global: 'Erro ao salvar os dados: ' + submitResult.error });
+              setIsGenerating(false);
+              return;
+            }
+          } catch (err) {
+            console.error("Erro ao enviar dados ao Apps Script:", err);
+            setErrors({ global: 'Erro de conexão com o servidor. Por favor, verifique sua rede ou tente novamente.' });
+            setIsGenerating(false);
+            return;
+          }
+        }
 
         try {
           const { jsPDF } = window.jspdf;
@@ -598,7 +716,7 @@
           } else if (formData.planoSaudeOpcao === 'b') {
             optionText = "[ X ] Opto pelo plano de saúde individual, e autorizo o empregador a descontar mensalmente em folha de pagamento os valores de mensalidade e coparticipação.";
           } else {
-            optionText = "[ X ] Autorizo a inclusão dos dependentes e o desconto em folha de pagamento dos valores correspondentes de mensalidade e coparticipação referentes aos mesmos.";
+            optionText = "[ X ] Opto pelo plano de saúde com inclusão de dependente(s), e autorizo o empregador a descontar mensalmente em folha de pagamento os valores correspondentes de mensalidade e coparticipação.";
           }
 
           const splitOptText = doc.splitTextToSize(optionText, printableWidth);
@@ -708,6 +826,10 @@
           doc.save(fileName);
 
           setSuccessMessage("Ficha cadastral gerada com sucesso! O download do PDF iniciará automaticamente.");
+          // Se tiver token, transiciona para a tela de sucesso
+          if (token && APPS_SCRIPT_URL !== 'COLE_A_URL_DO_APPS_SCRIPT_AQUI') {
+            setIsFormSubmitted(true);
+          }
         } catch (err) {
           console.error("Erro na geração do PDF:", err);
           setErrors({ global: "Ocorreu um erro ao gerar o PDF. Veja os detalhes no console do navegador." });
@@ -715,6 +837,93 @@
           setIsGenerating(false);
         }
       };
+
+      if (isValidatingToken) {
+        return (
+          <div className="min-h-screen flex items-center justify-center bg-slate-50 p-4">
+            <div className="bg-white p-8 rounded-3xl shadow-xl shadow-slate-200/50 border border-slate-100 max-w-md w-full text-center space-y-6">
+              <div className="flex justify-center">
+                <div className="animate-spin rounded-full h-12 w-12 border-4 border-premier-blue border-t-premier-orange"></div>
+              </div>
+              <div>
+                <h2 className="text-xl font-bold text-premier-blue font-sans">Carregando Formulário</h2>
+                <p className="text-slate-400 text-sm mt-2 font-sans">Aguarde enquanto validamos suas credenciais...</p>
+              </div>
+            </div>
+          </div>
+        );
+      }
+
+      if (tokenError) {
+        const isAlreadySubmitted = tokenError.includes('já foi preenchido');
+        return (
+          <div className="min-h-screen flex items-center justify-center bg-slate-50 p-4">
+            <div className="bg-white p-8 md:p-10 rounded-3xl shadow-xl shadow-slate-200/50 border border-slate-100 max-w-lg w-full text-center space-y-6">
+              <div className="flex justify-center">
+                <div className={`w-16 h-16 rounded-full flex items-center justify-center ${isAlreadySubmitted ? 'bg-emerald-50 text-emerald-500' : 'bg-red-50 text-red-500'}`}>
+                  {isAlreadySubmitted ? (
+                    <svg className="w-10 h-10" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                  ) : (
+                    <svg className="w-10 h-10" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                    </svg>
+                  )}
+                </div>
+              </div>
+              <div>
+                <h2 className="text-xl md:text-2xl font-bold text-premier-blue font-sans">
+                  {isAlreadySubmitted ? "Formulário Concluído!" : "Acesso Restrito"}
+                </h2>
+                <p className="text-slate-500 text-sm mt-3 leading-relaxed font-sans">{tokenError}</p>
+              </div>
+              {isAlreadySubmitted ? (
+                <div className="p-4 bg-emerald-50 rounded-2xl border border-emerald-100 font-sans">
+                  <p className="text-xs text-emerald-700 font-semibold leading-relaxed">
+                    Suas informações de admissão foram recebidas com sucesso pela nossa equipe de Recursos Humanos. O processo está em andamento!
+                  </p>
+                </div>
+              ) : (
+                <p className="text-xs text-slate-400 font-sans">
+                  Se você acredita que isso é um erro, por favor solicite um novo link ao RH da Premier Logistics.
+                </p>
+              )}
+            </div>
+          </div>
+        );
+      }
+
+      if (isFormSubmitted) {
+        return (
+          <div className="min-h-screen flex items-center justify-center bg-slate-50 p-4">
+            <div className="bg-white p-8 md:p-10 rounded-3xl shadow-xl shadow-slate-200/50 border border-slate-100 max-w-lg w-full text-center space-y-6">
+              <div className="flex justify-center">
+                <div className="w-16 h-16 rounded-full bg-emerald-50 text-emerald-500 flex items-center justify-center">
+                  <svg className="w-10 h-10" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                </div>
+              </div>
+              <div>
+                <h2 className="text-xl md:text-2xl font-bold text-premier-blue font-sans">Formulário Enviado com Sucesso!</h2>
+                <p className="text-slate-500 text-sm mt-3 leading-relaxed font-sans">
+                  Obrigado por enviar suas informações. Os dados foram salvos no sistema interno e o Recursos Humanos já foi notificado.
+                </p>
+              </div>
+              <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100 text-left space-y-2 font-sans">
+                <h4 className="text-xs font-bold text-premier-blue uppercase tracking-wider">Download do PDF</h4>
+                <p className="text-xs text-slate-500 leading-normal">
+                  O download do PDF da sua Ficha de Admissão preenchida foi iniciado automaticamente. Caso não tenha começado, utilize o botão abaixo para baixar uma cópia.
+                </p>
+              </div>
+              <p className="text-xs text-slate-400 font-sans">
+                Você já pode fechar esta aba.
+              </p>
+            </div>
+          </div>
+        );
+      }
 
       return (
         <div className="container mx-auto px-4 mt-8 max-w-5xl">
@@ -737,6 +946,11 @@
                   <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight">
                     Ficha de Cadastro de Admissão
                   </h1>
+                  {vaga && (
+                    <span className="inline-block mt-2 px-3 py-1 bg-premier-orange text-white text-xs font-bold rounded-full font-sans">
+                      Vaga: {vaga}
+                    </span>
+                  )}
                 </div>
               </div>
             </div>
@@ -1232,7 +1446,7 @@
                     type="text"
                     value={formData.calcaTamanho}
                     onChange={(e) => handleInputChange('calcaTamanho', e.target.value)}
-                    placeholder="Ex: 42"
+                    placeholder="Ex: M"
                     className="w-full"
                   />
                 </div>
@@ -1376,7 +1590,7 @@
                         }`}>
                         {formData.planoSaudeOpcao === 'c' && <span className="text-[10px]">✓</span>}
                       </div>
-                      <span className="text-sm">Autorizo a inclusão dos dependentes e o desconto em folha de pagamento dos valores correspondentes de mensalidade e coparticipação referentes aos mesmos.</span>
+                      <span className="text-sm">Opto pelo plano de saúde com inclusão de dependente(s), e autorizo o empregador a descontar mensalmente em folha de pagamento os valores correspondentes de mensalidade e coparticipação.</span>
                     </button>
                   </div>
                 </div>
@@ -1465,7 +1679,7 @@
                   <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Forma de Assinatura *</label>
                   <PillSelector
                     options={[
-                      { label: 'Digitar Nome (Estilo Garamond)', value: 'texto' },
+                      { label: 'Digitar Nome', value: 'texto' },
                       { label: 'Desenhar na Tela (Mouse ou Touch)', value: 'desenho' }
                     ]}
                     selected={formData.tipoAssinatura}
@@ -1542,7 +1756,7 @@
                     }`}>
                     <label className={`block text-xs font-bold uppercase tracking-wider mb-2 ${errors.assinaturaDesenho ? 'text-red-600' : 'text-slate-500'
                       }`}>
-                      Assinatura na Tela *
+                      Assinatura na Tela (Mouse ou Touch) *
                     </label>
                     <div className={`bg-white border rounded-xl overflow-hidden shadow-inner relative ${errors.assinaturaDesenho ? 'border-red-300' : 'border-slate-200'
                       }`}>

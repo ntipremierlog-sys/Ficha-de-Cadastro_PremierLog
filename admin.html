@@ -1,0 +1,1331 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Painel de Controle — RH Premier Logistics</title>
+  <meta name="description" content="Painel administrativo de controle de fichas de admissão — Premier Logistics" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+  <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+  <style>
+    /* ===================================================
+       VARIÁVEIS & RESET
+    =================================================== */
+    :root {
+      --navy:       #211551;
+      --navy-dark:  #160e38;
+      --navy-mid:   #2d1d6e;
+      --gold:       #D4AF37;
+      --orange:     #E8761A;
+      --orange-dk:  #c0601a;
+      --bg:         #f1f5f9;
+      --white:      #ffffff;
+      --text:       #1e293b;
+      --text-2:     #475569;
+      --text-3:     #94a3b8;
+      --border:     #e2e8f0;
+      --success:    #10b981;
+      --success-bg: #ecfdf5;
+      --warning:    #f59e0b;
+      --warning-bg: #fffbeb;
+      --danger:     #ef4444;
+      --danger-bg:  #fef2f2;
+      --sidebar-w:  268px;
+      --radius:     10px;
+      --shadow:     0 1px 4px rgba(0,0,0,.08), 0 4px 16px rgba(0,0,0,.06);
+      --shadow-lg:  0 8px 32px rgba(0,0,0,.14);
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; font-family: 'Inter', sans-serif; background: var(--bg); color: var(--text); font-size: 14px; }
+    button { cursor: pointer; font-family: inherit; border: none; outline: none; }
+    input, select, textarea { font-family: inherit; outline: none; border: none; }
+    a { text-decoration: none; color: inherit; }
+    ul { list-style: none; }
+
+    /* ===================================================
+       TELA DE LOGIN
+    =================================================== */
+    #loginPage {
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: linear-gradient(135deg, #160e38 0%, #211551 40%, #2d1d6e 100%);
+      padding: 24px;
+    }
+    .login-card {
+      background: var(--white);
+      border-radius: 20px;
+      padding: 48px 44px;
+      width: 100%;
+      max-width: 420px;
+      box-shadow: 0 24px 64px rgba(0,0,0,.35);
+      text-align: center;
+    }
+    .login-logo {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 32px;
+    }
+    .login-logo-badge {
+      width: 64px; height: 64px;
+      background: var(--navy);
+      border-radius: 16px;
+      display: flex; align-items: center; justify-content: center;
+      box-shadow: 0 8px 24px rgba(33,21,81,.4);
+    }
+    .login-logo-badge svg { width: 36px; height: 36px; fill: var(--gold); }
+    .login-logo h1 { font-size: 20px; font-weight: 700; color: var(--navy); line-height: 1.2; }
+    .login-logo p { font-size: 12px; color: var(--text-3); }
+    .login-label {
+      font-size: 11px; font-weight: 600; text-transform: uppercase;
+      letter-spacing: .6px; color: var(--text-2); text-align: left; display: block;
+      margin-bottom: 8px;
+    }
+    .login-input-wrap { position: relative; margin-bottom: 20px; }
+    .login-input {
+      width: 100%; padding: 13px 44px 13px 16px;
+      border: 1.5px solid var(--border); border-radius: 10px;
+      font-size: 15px; transition: border-color .2s;
+      background: var(--bg);
+    }
+    .login-input:focus { border-color: var(--navy); background: white; }
+    .toggle-pw {
+      position: absolute; right: 14px; top: 50%; transform: translateY(-50%);
+      background: none; color: var(--text-3); font-size: 16px;
+    }
+    .btn-login {
+      width: 100%; padding: 14px; border-radius: 10px;
+      background: var(--navy); color: white;
+      font-size: 15px; font-weight: 600;
+      transition: background .2s, transform .1s;
+    }
+    .btn-login:hover { background: var(--navy-mid); }
+    .btn-login:active { transform: scale(.98); }
+    .login-error {
+      background: var(--danger-bg); color: var(--danger);
+      border: 1px solid #fecaca; border-radius: 8px;
+      padding: 10px 14px; font-size: 13px; margin-top: 14px;
+      display: none;
+    }
+    .login-footer { margin-top: 32px; font-size: 11px; color: var(--text-3); }
+
+    /* ===================================================
+       LAYOUT PRINCIPAL
+    =================================================== */
+    #app { display: none; height: 100vh; overflow: hidden; }
+    .app-layout { display: flex; height: 100vh; }
+
+    /* ===================================================
+       SIDEBAR
+    =================================================== */
+    .sidebar {
+      width: var(--sidebar-w); background: var(--navy);
+      display: flex; flex-direction: column;
+      flex-shrink: 0; overflow: hidden;
+    }
+    .sidebar-brand {
+      padding: 24px 20px 20px;
+      border-bottom: 1px solid rgba(255,255,255,.08);
+    }
+    .sidebar-brand h2 { color: var(--gold); font-size: 16px; font-weight: 700; letter-spacing: .5px; }
+    .sidebar-brand p { color: rgba(255,255,255,.45); font-size: 11px; margin-top: 2px; }
+    .sidebar-nav { flex: 1; padding: 16px 12px; display: flex; flex-direction: column; gap: 4px; }
+    .nav-item {
+      display: flex; align-items: center; gap: 12px;
+      padding: 11px 14px; border-radius: 8px;
+      color: rgba(255,255,255,.6); font-size: 13.5px; font-weight: 500;
+      cursor: pointer; transition: all .18s; user-select: none;
+    }
+    .nav-item svg { width: 18px; height: 18px; flex-shrink: 0; opacity: .7; }
+    .nav-item:hover { background: rgba(255,255,255,.08); color: rgba(255,255,255,.9); }
+    .nav-item.active { background: rgba(255,255,255,.13); color: white; }
+    .nav-item.active svg { opacity: 1; }
+    .sidebar-footer {
+      padding: 16px 12px;
+      border-top: 1px solid rgba(255,255,255,.08);
+    }
+    .btn-logout {
+      display: flex; align-items: center; gap: 10px;
+      width: 100%; padding: 10px 14px; border-radius: 8px;
+      background: none; color: rgba(255,255,255,.5);
+      font-size: 13px; font-weight: 500;
+      transition: all .18s;
+    }
+    .btn-logout:hover { background: rgba(239,68,68,.15); color: #fca5a5; }
+    .btn-logout svg { width: 16px; height: 16px; }
+
+    /* ===================================================
+       CONTEÚDO PRINCIPAL
+    =================================================== */
+    .main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+    .topbar {
+      background: white; border-bottom: 1px solid var(--border);
+      padding: 0 28px; height: 62px;
+      display: flex; align-items: center; justify-content: space-between;
+      flex-shrink: 0; box-shadow: 0 1px 0 var(--border);
+    }
+    .topbar-left h3 { font-size: 16px; font-weight: 600; color: var(--text); }
+    .topbar-left p { font-size: 12px; color: var(--text-3); margin-top: 1px; }
+    .topbar-right { display: flex; align-items: center; gap: 10px; }
+    .btn-refresh {
+      width: 36px; height: 36px; border-radius: 8px;
+      background: var(--bg); color: var(--text-2);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 16px; transition: all .18s;
+    }
+    .btn-refresh:hover { background: var(--border); }
+    .btn-refresh.spinning svg { animation: spin .8s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .btn-primary {
+      display: flex; align-items: center; gap: 7px;
+      padding: 9px 18px; border-radius: 8px;
+      background: var(--orange); color: white;
+      font-size: 13.5px; font-weight: 600;
+      transition: all .18s;
+    }
+    .btn-primary:hover { background: var(--orange-dk); }
+    .btn-primary svg { width: 15px; height: 15px; }
+    .btn-excel {
+      display: flex; align-items: center; gap: 7px;
+      padding: 9px 16px; border-radius: 8px;
+      background: #166534; color: white;
+      font-size: 13.5px; font-weight: 600;
+      transition: all .18s;
+    }
+    .btn-excel:hover { background: #14532d; }
+    .btn-excel svg { width: 15px; height: 15px; }
+
+    /* ===================================================
+       ÁREA DE SCROLL
+    =================================================== */
+    .content-scroll { flex: 1; overflow-y: auto; padding: 24px 28px; }
+
+    /* ===================================================
+       DASHBOARD — CARDS
+    =================================================== */
+    .stats-grid {
+      display: grid; grid-template-columns: repeat(4, 1fr);
+      gap: 16px; margin-bottom: 24px;
+    }
+    .stat-card {
+      background: white; border-radius: var(--radius);
+      padding: 20px 22px; box-shadow: var(--shadow);
+      border-left: 4px solid transparent;
+      transition: transform .18s, box-shadow .18s;
+      cursor: default;
+    }
+    .stat-card:hover { transform: translateY(-2px); box-shadow: var(--shadow-lg); }
+    .stat-card.total  { border-color: var(--navy); }
+    .stat-card.pending{ border-color: var(--warning); }
+    .stat-card.done   { border-color: var(--success); }
+    .stat-card.rate   { border-color: var(--orange); }
+    .stat-label { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .6px; color: var(--text-3); margin-bottom: 10px; }
+    .stat-value { font-size: 34px; font-weight: 700; color: var(--text); line-height: 1; }
+    .stat-card.total  .stat-value { color: var(--navy); }
+    .stat-card.pending .stat-value { color: var(--warning); }
+    .stat-card.done   .stat-value { color: var(--success); }
+    .stat-card.rate   .stat-value { color: var(--orange); }
+    .stat-sub { font-size: 11.5px; color: var(--text-3); margin-top: 6px; }
+
+    /* ===================================================
+       CANDIDATOS — PAINEL
+    =================================================== */
+    .panel {
+      background: white; border-radius: var(--radius);
+      box-shadow: var(--shadow); overflow: hidden;
+    }
+    .panel-header {
+      padding: 18px 22px; border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    }
+    .panel-title { font-size: 15px; font-weight: 600; color: var(--text); }
+    .filter-row { display: flex; gap: 10px; align-items: center; }
+    .search-box {
+      display: flex; align-items: center; gap: 8px;
+      background: var(--bg); border: 1.5px solid var(--border);
+      border-radius: 8px; padding: 7px 12px; width: 220px;
+      transition: border-color .18s;
+    }
+    .search-box:focus-within { border-color: var(--navy); background: white; }
+    .search-box svg { width: 14px; height: 14px; color: var(--text-3); flex-shrink: 0; }
+    .search-box input { background: none; font-size: 13px; color: var(--text); width: 100%; }
+    .search-box input::placeholder { color: var(--text-3); }
+    .filter-select {
+      padding: 8px 12px; border: 1.5px solid var(--border);
+      border-radius: 8px; background: var(--bg);
+      font-size: 13px; color: var(--text);
+      cursor: pointer; transition: border-color .18s;
+    }
+    .filter-select:focus { border-color: var(--navy); }
+
+    /* ===================================================
+       TABELA
+    =================================================== */
+    .table-wrap { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; }
+    thead th {
+      text-align: left; padding: 12px 16px;
+      font-size: 11px; font-weight: 600; text-transform: uppercase;
+      letter-spacing: .6px; color: var(--text-3);
+      background: var(--bg); border-bottom: 1px solid var(--border);
+      white-space: nowrap;
+    }
+    tbody tr {
+      border-bottom: 1px solid var(--border);
+      transition: background .12s;
+    }
+    tbody tr:last-child { border-bottom: none; }
+    tbody tr:hover { background: #fafbff; }
+    td { padding: 13px 16px; font-size: 13.5px; color: var(--text); vertical-align: middle; }
+    .td-nome strong { display: block; font-weight: 600; }
+    .td-nome span { font-size: 12px; color: var(--text-3); }
+    .badge {
+      display: inline-flex; align-items: center; gap: 5px;
+      padding: 4px 10px; border-radius: 20px;
+      font-size: 12px; font-weight: 600; white-space: nowrap;
+    }
+    .badge::before { content: ''; width: 6px; height: 6px; border-radius: 50%; display: inline-block; }
+    .badge-pending {
+      background: var(--warning-bg); color: #92400e;
+    }
+    .badge-pending::before { background: var(--warning); }
+    .badge-done {
+      background: var(--success-bg); color: #065f46;
+    }
+    .badge-done::before { background: var(--success); }
+    .td-date { font-size: 12.5px; color: var(--text-2); white-space: nowrap; }
+    .td-actions { white-space: nowrap; }
+    .action-btn {
+      display: inline-flex; align-items: center; gap: 5px;
+      padding: 6px 10px; border-radius: 6px;
+      font-size: 12px; font-weight: 500;
+      transition: all .15s; margin-right: 4px;
+    }
+    .action-btn svg { width: 13px; height: 13px; }
+    .action-btn-link { background: #eff6ff; color: #1d4ed8; }
+    .action-btn-link:hover { background: #dbeafe; }
+    .action-btn-mail { background: #f5f3ff; color: #5b21b6; }
+    .action-btn-mail:hover { background: #ede9fe; }
+    .action-btn-eye { background: var(--success-bg); color: #065f46; }
+    .action-btn-eye:hover { background: #d1fae5; }
+    .action-btn-del { background: var(--danger-bg); color: #991b1b; }
+    .action-btn-del:hover { background: #fecaca; }
+
+    /* Estado vazio */
+    .empty-state {
+      text-align: center; padding: 56px 20px;
+    }
+    .empty-state svg { width: 52px; height: 52px; color: var(--text-3); margin-bottom: 14px; }
+    .empty-state h4 { font-size: 15px; font-weight: 600; color: var(--text-2); }
+    .empty-state p { font-size: 13px; color: var(--text-3); margin-top: 6px; }
+
+    /* Loading skeleton */
+    .skeleton-row td > div {
+      height: 14px; border-radius: 4px;
+      background: linear-gradient(90deg, #f1f5f9 25%, #e2e8f0 50%, #f1f5f9 75%);
+      background-size: 200% 100%;
+      animation: shimmer 1.4s infinite;
+    }
+    @keyframes shimmer { to { background-position: -200% 0; } }
+
+    /* ===================================================
+       MODALS
+    =================================================== */
+    .modal-overlay {
+      position: fixed; inset: 0; z-index: 1000;
+      background: rgba(0,0,0,.5); backdrop-filter: blur(3px);
+      display: flex; align-items: center; justify-content: center;
+      padding: 24px; opacity: 0; pointer-events: none;
+      transition: opacity .2s;
+    }
+    .modal-overlay.open { opacity: 1; pointer-events: all; }
+    .modal {
+      background: white; border-radius: 16px;
+      box-shadow: var(--shadow-lg); width: 100%;
+      transform: translateY(16px) scale(.97);
+      transition: transform .22s;
+    }
+    .modal-overlay.open .modal { transform: none; }
+    .modal-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 22px 26px; border-bottom: 1px solid var(--border);
+    }
+    .modal-header h3 { font-size: 16px; font-weight: 700; color: var(--navy); }
+    .btn-close {
+      width: 32px; height: 32px; border-radius: 8px;
+      background: var(--bg); color: var(--text-2); font-size: 18px;
+      display: flex; align-items: center; justify-content: center;
+      transition: background .15s;
+    }
+    .btn-close:hover { background: var(--border); }
+    .modal-body { padding: 26px; }
+    .modal-footer {
+      padding: 16px 26px; border-top: 1px solid var(--border);
+      display: flex; justify-content: flex-end; gap: 10px;
+    }
+
+    /* Form fields inside modal */
+    .form-group { margin-bottom: 18px; }
+    .form-label {
+      display: block; font-size: 12px; font-weight: 600;
+      text-transform: uppercase; letter-spacing: .5px;
+      color: var(--text-2); margin-bottom: 7px;
+    }
+    .form-input {
+      width: 100%; padding: 11px 14px;
+      border: 1.5px solid var(--border); border-radius: 8px;
+      font-size: 14px; color: var(--text);
+      background: var(--bg); transition: border-color .18s, background .18s;
+    }
+    .form-input:focus { border-color: var(--navy); background: white; }
+    .form-check {
+      display: flex; align-items: center; gap: 10px;
+      padding: 13px 14px; border: 1.5px solid var(--border);
+      border-radius: 8px; cursor: pointer;
+      transition: border-color .18s, background .18s;
+    }
+    .form-check:hover { border-color: var(--navy); background: #f8f6ff; }
+    .form-check input[type=checkbox] { width: 16px; height: 16px; accent-color: var(--navy); cursor: pointer; }
+    .form-check-label { font-size: 13.5px; color: var(--text); }
+
+    .btn-cancel {
+      padding: 10px 20px; border-radius: 8px;
+      background: var(--bg); color: var(--text-2);
+      font-size: 14px; font-weight: 500; border: 1.5px solid var(--border);
+      transition: background .15s;
+    }
+    .btn-cancel:hover { background: var(--border); }
+    .btn-confirm {
+      padding: 10px 22px; border-radius: 8px;
+      background: var(--orange); color: white;
+      font-size: 14px; font-weight: 600;
+      transition: background .15s;
+      display: flex; align-items: center; gap: 8px;
+    }
+    .btn-confirm:hover { background: var(--orange-dk); }
+    .btn-confirm:disabled { opacity: .6; cursor: not-allowed; }
+
+    /* Link display */
+    .link-box {
+      background: var(--bg); border: 1.5px solid var(--border);
+      border-radius: 8px; padding: 12px 14px;
+      margin-top: 14px; display: flex; align-items: center; gap: 10px;
+    }
+    .link-box span { font-size: 12px; color: var(--text-2); flex: 1; word-break: break-all; line-height: 1.5; }
+    .btn-copy-link {
+      display: flex; align-items: center; gap: 6px;
+      padding: 8px 14px; border-radius: 7px;
+      background: var(--navy); color: white;
+      font-size: 12px; font-weight: 600;
+      flex-shrink: 0; transition: background .15s;
+    }
+    .btn-copy-link:hover { background: var(--navy-mid); }
+    .btn-copy-link svg { width: 13px; height: 13px; }
+    .btn-whatsapp {
+      display: flex; align-items: center; gap: 6px;
+      padding: 8px 14px; border-radius: 7px;
+      background: #22c55e; color: white;
+      font-size: 12px; font-weight: 600;
+      flex-shrink: 0; transition: background .15s; margin-top: 8px;
+    }
+    .btn-whatsapp:hover { background: #16a34a; }
+
+    /* Details modal */
+    .details-grid {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 10px 20px;
+    }
+    .detail-item { }
+    .detail-item .dk { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .5px; color: var(--text-3); margin-bottom: 3px; }
+    .detail-item .dv { font-size: 13.5px; color: var(--text); word-break: break-word; }
+    .detail-item.full { grid-column: 1 / -1; }
+    .details-section { margin-bottom: 22px; }
+    .details-section-title {
+      font-size: 12px; font-weight: 700; text-transform: uppercase;
+      letter-spacing: .6px; color: var(--navy); padding-bottom: 8px;
+      border-bottom: 2px solid var(--gold); margin-bottom: 14px;
+    }
+    #detailsModal .modal { max-width: 680px; max-height: 85vh; display: flex; flex-direction: column; }
+    #detailsModal .modal-body { overflow-y: auto; }
+
+    /* Confirm modal */
+    #confirmModal .modal { max-width: 380px; }
+    .confirm-icon {
+      width: 52px; height: 52px; border-radius: 50%;
+      background: var(--danger-bg); display: flex;
+      align-items: center; justify-content: center; margin: 0 auto 16px;
+    }
+    .confirm-icon svg { width: 24px; height: 24px; color: var(--danger); }
+    #confirmModal .modal-body { text-align: center; }
+    #confirmModal h4 { font-size: 16px; font-weight: 700; color: var(--text); margin-bottom: 8px; }
+    #confirmModal p { font-size: 13.5px; color: var(--text-2); line-height: 1.6; }
+    .btn-delete-confirm {
+      padding: 10px 22px; border-radius: 8px;
+      background: var(--danger); color: white;
+      font-size: 14px; font-weight: 600;
+      transition: background .15s;
+    }
+    .btn-delete-confirm:hover { background: #dc2626; }
+
+    /* Toast */
+    #toast {
+      position: fixed; bottom: 24px; right: 24px; z-index: 9999;
+      padding: 13px 20px; border-radius: 10px;
+      font-size: 13.5px; font-weight: 500; color: white;
+      box-shadow: 0 8px 24px rgba(0,0,0,.2);
+      transform: translateY(20px); opacity: 0;
+      transition: all .25s; pointer-events: none;
+    }
+    #toast.show { transform: none; opacity: 1; pointer-events: all; }
+    #toast.success { background: var(--success); }
+    #toast.error   { background: var(--danger); }
+    #toast.info    { background: var(--navy); }
+    #toast.warning { background: var(--warning); color: #1c1917; }
+
+    /* Ajustes responsive */
+    @media (max-width: 1024px) {
+      .stats-grid { grid-template-columns: repeat(2, 1fr); }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ===================== TELA DE LOGIN ===================== -->
+<div id="loginPage">
+  <div class="login-card">
+    <div class="login-logo">
+      <div class="login-logo-badge">
+        <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+      </div>
+      <h1>Premier Logistics</h1>
+      <p>Painel de Controle — RH</p>
+    </div>
+    <label class="login-label" for="loginPassword">Senha de acesso</label>
+    <div class="login-input-wrap">
+      <input class="login-input" type="password" id="loginPassword" placeholder="••••••••••" autocomplete="current-password" />
+      <button class="toggle-pw" onclick="togglePw()" title="Mostrar/ocultar senha" type="button">👁</button>
+    </div>
+    <button class="btn-login" onclick="doLogin()" id="btnLogin">Entrar</button>
+    <div class="login-error" id="loginError">Senha incorreta. Tente novamente.</div>
+    <div class="login-footer">© 2025 Premier Logistics — Acesso restrito ao RH</div>
+  </div>
+</div>
+
+<!-- ===================== APLICAÇÃO ===================== -->
+<div id="app">
+  <!-- Demo banner -->
+  <div id="demoBanner" style="display:none; background:linear-gradient(90deg, #f59e0b 0%, #d97706 100%); color:white; padding:10px 20px; font-size:12.5px; font-weight:600; text-align:center; align-items:center; justify-content:center; gap:8px; box-shadow: 0 2px 4px rgba(0,0,0,0.08);">
+    <span>⚠️ <strong>Modo de Demonstração:</strong> Você está visualizando dados simulados locais. Para conectar o painel ao seu Google Sheets real, configure a variável <code>APPS_SCRIPT_URL</code> no código deste arquivo.</span>
+    <a href="SETUP_GUIDE.md" target="_blank" style="background:rgba(255,255,255,0.2); padding:3px 10px; border-radius:5px; text-decoration:none; color:white; font-size:11.5px; transition:all 0.2s;">Ver Guia de Configuração</a>
+  </div>
+  <div class="app-layout">
+
+    <!-- SIDEBAR -->
+    <aside class="sidebar">
+      <div class="sidebar-brand">
+        <h2>Premier Logistics</h2>
+        <p>Painel de RH</p>
+      </div>
+      <nav class="sidebar-nav">
+        <div class="nav-item active" onclick="setView('dashboard')" id="nav-dashboard">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="9"/><rect x="14" y="3" width="7" height="5"/><rect x="14" y="12" width="7" height="9"/><rect x="3" y="16" width="7" height="5"/></svg>
+          Dashboard
+        </div>
+        <div class="nav-item" onclick="setView('candidates')" id="nav-candidates">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+          Candidatos
+          <span id="sidebarBadge" style="margin-left:auto;background:rgba(255,255,255,.15);color:white;font-size:11px;font-weight:700;padding:2px 7px;border-radius:10px;display:none;"></span>
+        </div>
+      </nav>
+      <div class="sidebar-footer">
+        <button class="btn-logout" onclick="doLogout()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+          Sair
+        </button>
+      </div>
+    </aside>
+
+    <!-- CONTEÚDO -->
+    <main class="main">
+      <div class="topbar">
+        <div class="topbar-left">
+          <h3 id="topbarTitle">Dashboard</h3>
+          <p id="topbarSub">Visão geral dos processos seletivos</p>
+        </div>
+        <div class="topbar-right">
+          <button class="btn-refresh" id="btnRefresh" onclick="loadCandidates()" title="Atualizar">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.88"/></svg>
+          </button>
+          <button class="btn-excel" onclick="exportExcel()" title="Exportar para Excel">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="16" y2="17"/></svg>
+            Exportar Excel
+          </button>
+          <button class="btn-primary" onclick="openAddModal()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            Novo Candidato
+          </button>
+        </div>
+      </div>
+
+      <div class="content-scroll">
+        <!-- DASHBOARD -->
+        <div id="viewDashboard">
+          <div class="stats-grid">
+            <div class="stat-card total">
+              <div class="stat-label">Total de Candidatos</div>
+              <div class="stat-value" id="statTotal">—</div>
+              <div class="stat-sub">cadastrados no sistema</div>
+            </div>
+            <div class="stat-card pending">
+              <div class="stat-label">🟡 Pendentes</div>
+              <div class="stat-value" id="statPending">—</div>
+              <div class="stat-sub">aguardando preenchimento</div>
+            </div>
+            <div class="stat-card done">
+              <div class="stat-label">🟢 Concluídos</div>
+              <div class="stat-value" id="statDone">—</div>
+              <div class="stat-sub">formulários recebidos</div>
+            </div>
+            <div class="stat-card rate">
+              <div class="stat-label">Taxa de Conclusão</div>
+              <div class="stat-value" id="statRate">—</div>
+              <div class="stat-sub">do total enviado</div>
+            </div>
+          </div>
+
+          <div class="panel">
+            <div class="panel-header">
+              <span class="panel-title">Candidatos Recentes</span>
+              <button class="btn-primary" style="font-size:12.5px;padding:7px 14px;" onclick="setView('candidates')">Ver todos →</button>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>CANDIDATO</th>
+                    <th>VAGA</th>
+                    <th>STATUS</th>
+                    <th>DATA DE ENVIO</th>
+                    <th>AÇÕES</th>
+                  </tr>
+                </thead>
+                <tbody id="dashboardTableBody">
+                  <tr class="skeleton-row"><td><div style="width:160px"></div></td><td><div style="width:120px"></div></td><td><div style="width:80px"></div></td><td><div style="width:100px"></div></td><td><div style="width:120px"></div></td></tr>
+                  <tr class="skeleton-row"><td><div style="width:140px"></div></td><td><div style="width:100px"></div></td><td><div style="width:80px"></div></td><td><div style="width:100px"></div></td><td><div style="width:120px"></div></td></tr>
+                  <tr class="skeleton-row"><td><div style="width:180px"></div></td><td><div style="width:130px"></div></td><td><div style="width:80px"></div></td><td><div style="width:100px"></div></td><td><div style="width:120px"></div></td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- CANDIDATOS -->
+        <div id="viewCandidates" style="display:none;">
+          <div class="panel">
+            <div class="panel-header">
+              <span class="panel-title">Lista de Candidatos</span>
+              <div class="filter-row">
+                <div class="search-box">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                  <input type="text" id="searchInput" placeholder="Buscar por nome..." oninput="applyFilters()" />
+                </div>
+                <select class="filter-select" id="statusFilter" onchange="applyFilters()">
+                  <option value="">Todos os status</option>
+                  <option value="Pendente">🟡 Pendentes</option>
+                  <option value="Concluído">🟢 Concluídos</option>
+                </select>
+                <select class="filter-select" id="vagaFilter" onchange="applyFilters()">
+                  <option value="">Todas as vagas</option>
+                </select>
+              </div>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>CANDIDATO</th>
+                    <th>VAGA</th>
+                    <th>STATUS</th>
+                    <th>ENVIADO EM</th>
+                    <th>PREENCHIDO EM</th>
+                    <th>AÇÕES</th>
+                  </tr>
+                </thead>
+                <tbody id="candidatesTableBody">
+                  <tr class="skeleton-row"><td><div style="width:160px"></div></td><td><div style="width:100px"></div></td><td><div style="width:80px"></div></td><td><div style="width:100px"></div></td><td><div style="width:100px"></div></td><td><div style="width:160px"></div></td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div><!-- /content-scroll -->
+    </main>
+
+  </div><!-- /app-layout -->
+</div><!-- /app -->
+
+<!-- ===================== MODAL: NOVO CANDIDATO ===================== -->
+<div class="modal-overlay" id="addModal">
+  <div class="modal" style="max-width:480px;">
+    <div class="modal-header">
+      <h3>Cadastrar Novo Candidato</h3>
+      <button class="btn-close" onclick="closeModal('addModal')">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label" for="inputNome">Nome completo *</label>
+        <input class="form-input" id="inputNome" type="text" placeholder="Ex: João da Silva" />
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="inputEmail">E-mail *</label>
+        <input class="form-input" id="inputEmail" type="email" placeholder="candidato@email.com" />
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="inputVaga">Vaga / Cargo *</label>
+        <input class="form-input" id="inputVaga" type="text" placeholder="Ex: Auxiliar Logístico" />
+      </div>
+      <label class="form-check" id="emailCheck">
+        <input type="checkbox" id="checkSendEmail" checked />
+        <span class="form-check-label">📧 Enviar e-mail de convite automaticamente</span>
+      </label>
+
+      <div id="successLinkBox" style="display:none; margin-top:20px;">
+        <div style="background:var(--success-bg);border:1.5px solid #6ee7b7;border-radius:8px;padding:14px 16px;margin-bottom:14px;">
+          <p style="font-size:13px;color:#065f46;font-weight:600;">✅ Candidato cadastrado com sucesso!</p>
+          <p id="emailStatus" style="font-size:12px;color:#047857;margin-top:4px;"></p>
+        </div>
+        <p style="font-size:12px;font-weight:600;color:var(--text-2);margin-bottom:8px;text-transform:uppercase;letter-spacing:.5px;">Link do formulário:</p>
+        <div class="link-box">
+          <span id="generatedLink"></span>
+          <button class="btn-copy-link" onclick="copyGeneratedLink()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+            Copiar
+          </button>
+        </div>
+        <button class="btn-whatsapp" onclick="sendWhatsApp()" style="width:100%;">
+          <svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 0 1-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 0 1-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 0 1 2.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0 0 12.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 0 0 5.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 0 0-3.48-8.413Z"/></svg>
+          Enviar via WhatsApp
+        </button>
+      </div>
+    </div>
+    <div class="modal-footer" id="addModalFooter">
+      <button class="btn-cancel" onclick="closeModal('addModal')">Cancelar</button>
+      <button class="btn-confirm" id="btnSaveCandidate" onclick="saveCandidate()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="15" height="15"><polyline points="20 6 9 17 4 12"/></svg>
+        Cadastrar
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== MODAL: DETALHES ===================== -->
+<div class="modal-overlay" id="detailsModal">
+  <div class="modal" style="max-width:680px;">
+    <div class="modal-header">
+      <h3 id="detailsModalTitle">Dados do Candidato</h3>
+      <button class="btn-close" onclick="closeModal('detailsModal')">×</button>
+    </div>
+    <div class="modal-body" id="detailsModalBody">
+      <p style="text-align:center;color:var(--text-3);padding:30px;">Carregando dados...</p>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-cancel" onclick="closeModal('detailsModal')">Fechar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== MODAL: CONFIRMAR EXCLUSÃO ===================== -->
+<div class="modal-overlay" id="confirmModal">
+  <div class="modal" style="max-width:380px;">
+    <div class="modal-body" style="padding:32px 26px;">
+      <div class="confirm-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+      </div>
+      <h4>Excluir candidato?</h4>
+      <p id="confirmText">Esta ação não pode ser desfeita. O candidato e seus dados serão removidos do sistema.</p>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-cancel" onclick="closeModal('confirmModal')">Cancelar</button>
+      <button class="btn-delete-confirm" id="btnConfirmDelete">Excluir</button>
+    </div>
+  </div>
+</div>
+
+<!-- TOAST -->
+<div id="toast"></div>
+
+<!-- ===================== JAVASCRIPT ===================== -->
+<script>
+// ============================================================
+// ⚠️  CONFIGURE AQUI APÓS PUBLICAR O APPS SCRIPT
+// ============================================================
+const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyEHKdUDWhXUD2n8S0_7Gl2lCtizGqj9gAICVJS6_en_OFl_sRzLMQJRr5trqHnWzK3tQ/exec';
+const ADMIN_SECRET    = 'Premier2025AdminSecret!'; // deve ser igual ao apps-script.js
+const ADMIN_PASSWORD  = 'Premier@2025';            // senha de login do painel
+const FORM_BASE_URL   = 'https://ntipremierlog-sys.github.io/Ficha-de-Cadastro_PremierLog/'; // URL do formulário
+
+// ============================================================
+// ESTADO
+// ============================================================
+let state = {
+  candidates: [],
+  filtered: [],
+  currentView: 'dashboard',
+  pendingDelete: null,
+  lastGenLink: ''
+};
+
+// ============================================================
+// LOGIN
+// ============================================================
+function doLogin() {
+  const pw = document.getElementById('loginPassword').value;
+  if (pw === ADMIN_PASSWORD) {
+    sessionStorage.setItem('rh_auth', '1');
+    document.getElementById('loginPage').style.display = 'none';
+    document.getElementById('app').style.display = 'block';
+    loadCandidates();
+  } else {
+    document.getElementById('loginError').style.display = 'block';
+    document.getElementById('loginPassword').value = '';
+    document.getElementById('loginPassword').focus();
+  }
+}
+function doLogout() {
+  sessionStorage.removeItem('rh_auth');
+  location.reload();
+}
+function togglePw() {
+  const el = document.getElementById('loginPassword');
+  el.type = el.type === 'password' ? 'text' : 'password';
+}
+document.getElementById('loginPassword').addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
+if (sessionStorage.getItem('rh_auth') === '1') {
+  document.getElementById('loginPage').style.display = 'none';
+  document.getElementById('app').style.display = 'block';
+}
+
+// ============================================================
+// NAVEGAÇÃO
+// ============================================================
+function setView(v) {
+  state.currentView = v;
+  document.getElementById('viewDashboard').style.display  = v === 'dashboard'  ? 'block' : 'none';
+  document.getElementById('viewCandidates').style.display = v === 'candidates' ? 'block' : 'none';
+  document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
+  document.getElementById('nav-' + v).classList.add('active');
+  const titles = { dashboard: ['Dashboard', 'Visão geral dos processos seletivos'], candidates: ['Candidatos', 'Gerenciar candidatos e acompanhar status'] };
+  document.getElementById('topbarTitle').textContent = titles[v][0];
+  document.getElementById('topbarSub').textContent   = titles[v][1];
+}
+
+// ============================================================
+// API
+// ============================================================
+async function apiGet(params) {
+  if (!APPS_SCRIPT_URL || APPS_SCRIPT_URL.includes('COLE')) {
+    showToast('⚠️ Configure a URL do Apps Script em admin.html', 'warning', 6000);
+    throw new Error('Apps Script URL não configurada');
+  }
+  const url = new URL(APPS_SCRIPT_URL);
+  url.searchParams.set('secret', ADMIN_SECRET);
+  Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, v));
+  const res = await fetch(url.toString(), { redirect: 'follow' });
+  return res.json();
+}
+
+// ============================================================
+// CARREGAR CANDIDATOS
+// ============================================================
+async function loadCandidates() {
+  const btn = document.getElementById('btnRefresh');
+  btn.classList.add('spinning');
+
+  if (APPS_SCRIPT_URL.includes('COLE')) {
+    // Modo Demo Fallback
+    setTimeout(() => {
+      document.getElementById('demoBanner').style.display = 'flex';
+      
+      if (state.candidates.length === 0) {
+        state.candidates = [
+          { id: "1", nome: "João Silva Santos", email: "joao.silva@email.com", vaga: "Auxiliar Logístico", token: "mockToken1", status: "Concluído", dataEnvio: "06/07/2026 10:15", dataPreenchimento: "06/07/2026 14:30" },
+          { id: "2", nome: "Maria Oliveira Costa", email: "maria.costa@email.com", vaga: "Analista de Importação", token: "mockToken2", status: "Pendente", dataEnvio: "06/07/2026 11:20", dataPreenchimento: "" },
+          { id: "3", nome: "Carlos Souza Junior", email: "carlos.souza@email.com", vaga: "Auxiliar Logístico", token: "mockToken3", status: "Concluído", dataEnvio: "05/07/2026 09:00", dataPreenchimento: "05/07/2026 15:45" },
+          { id: "4", nome: "Ana Paula Rodrigues", email: "ana.paula@email.com", vaga: "Supervisor de Operações", token: "mockToken4", status: "Pendente", dataEnvio: "04/07/2026 16:40", dataPreenchimento: "" }
+        ];
+      }
+      
+      updateStats();
+      populateVagaFilter();
+      applyFilters();
+      renderDashboardTable();
+      
+      const badge = document.getElementById('sidebarBadge');
+      if (state.candidates.length > 0) {
+        badge.textContent = state.candidates.length;
+        badge.style.display = 'inline-block';
+      }
+      btn.classList.remove('spinning');
+    }, 400);
+    return;
+  }
+
+  try {
+    const data = await apiGet({ action: 'getCandidates' });
+    if (data.error) { showToast('Erro: ' + data.error, 'error'); return; }
+    state.candidates = data.candidates || [];
+    updateStats();
+    populateVagaFilter();
+    applyFilters();
+    renderDashboardTable();
+    const badge = document.getElementById('sidebarBadge');
+    if (state.candidates.length > 0) {
+      badge.textContent = state.candidates.length;
+      badge.style.display = 'inline-block';
+    }
+  } catch(e) {
+    if (!APPS_SCRIPT_URL.includes('COLE')) showToast('Erro ao conectar com o servidor.', 'error');
+  } finally {
+    btn.classList.remove('spinning');
+  }
+}
+
+// ============================================================
+// STATS
+// ============================================================
+function updateStats() {
+  const total   = state.candidates.length;
+  const done    = state.candidates.filter(c => c.status === 'Concluído').length;
+  const pending = total - done;
+  const rate    = total > 0 ? Math.round((done / total) * 100) : 0;
+  document.getElementById('statTotal').textContent   = total;
+  document.getElementById('statPending').textContent = pending;
+  document.getElementById('statDone').textContent    = done;
+  document.getElementById('statRate').textContent    = rate + '%';
+}
+
+// ============================================================
+// FILTROS
+// ============================================================
+function populateVagaFilter() {
+  const vagas = [...new Set(state.candidates.map(c => c.vaga).filter(Boolean))].sort();
+  const sel = document.getElementById('vagaFilter');
+  const curr = sel.value;
+  sel.innerHTML = '<option value="">Todas as vagas</option>';
+  vagas.forEach(v => { const o = document.createElement('option'); o.value = v; o.textContent = v; if (v === curr) o.selected = true; sel.appendChild(o); });
+}
+
+function applyFilters() {
+  const q     = (document.getElementById('searchInput').value || '').toLowerCase().trim();
+  const stt   = document.getElementById('statusFilter').value;
+  const vaga  = document.getElementById('vagaFilter').value;
+  state.filtered = state.candidates.filter(c => {
+    if (q   && !(c.nome + c.email).toLowerCase().includes(q)) return false;
+    if (stt && c.status !== stt) return false;
+    if (vaga && c.vaga !== vaga) return false;
+    return true;
+  });
+  renderCandidatesTable();
+}
+
+// ============================================================
+// RENDER TABELAS
+// ============================================================
+function statusBadge(s) {
+  if (s === 'Concluído') return '<span class="badge badge-done">Concluído</span>';
+  return '<span class="badge badge-pending">Pendente</span>';
+}
+
+function renderDashboardTable() {
+  const tbody = document.getElementById('dashboardTableBody');
+  const list  = state.candidates.slice(0, 5);
+  if (!list.length) { tbody.innerHTML = '<tr><td colspan="5"><div class="empty-state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="23" y1="11" x2="17" y2="11"/><line x1="20" y1="8" x2="20" y2="14"/></svg><h4>Nenhum candidato ainda</h4><p>Clique em "Novo Candidato" para começar.</p></div></td></tr>'; return; }
+  tbody.innerHTML = list.map(c => `
+    <tr>
+      <td class="td-nome"><strong>${esc(c.nome)}</strong><span>${esc(c.email)}</span></td>
+      <td>${esc(c.vaga)}</td>
+      <td>${statusBadge(c.status)}</td>
+      <td class="td-date">${esc(c.dataEnvio)}</td>
+      <td class="td-actions">${actionBtns(c)}</td>
+    </tr>`).join('');
+}
+
+function renderCandidatesTable() {
+  const tbody = document.getElementById('candidatesTableBody');
+  const list  = state.filtered;
+  if (!list.length) { tbody.innerHTML = '<tr><td colspan="6"><div class="empty-state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg><h4>Nenhum resultado</h4><p>Tente outros filtros de busca.</p></div></td></tr>'; return; }
+  tbody.innerHTML = list.map(c => `
+    <tr>
+      <td class="td-nome"><strong>${esc(c.nome)}</strong><span>${esc(c.email)}</span></td>
+      <td>${esc(c.vaga)}</td>
+      <td>${statusBadge(c.status)}</td>
+      <td class="td-date">${esc(c.dataEnvio)}</td>
+      <td class="td-date">${c.dataPreenchimento ? esc(c.dataPreenchimento) : '<span style="color:var(--text-3)">—</span>'}</td>
+      <td class="td-actions">${actionBtns(c)}</td>
+    </tr>`).join('');
+}
+
+function actionBtns(c) {
+  let btns = `
+    <button class="action-btn action-btn-link" onclick="copyLink('${c.token}')" title="Copiar link">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+      Link
+    </button>
+    <button class="action-btn action-btn-mail" onclick="resendMail('${c.token}','${esc(c.nome)}')" title="Reenviar e-mail">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+      E-mail
+    </button>`;
+  if (c.status === 'Concluído') {
+    btns += `<button class="action-btn action-btn-eye" onclick="viewDetails('${c.token}','${esc(c.nome)}')" title="Ver dados">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+      Ver
+    </button>`;
+  }
+  btns += `<button class="action-btn action-btn-del" onclick="confirmDelete('${c.token}','${esc(c.nome)}')" title="Excluir">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+    Excluir
+  </button>`;
+  return btns;
+}
+
+function esc(s) { return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
+
+// ============================================================
+// AÇÕES: COPIAR LINK / WHATSAPP / EMAIL
+// ============================================================
+function getFormUrl(token) { return FORM_BASE_URL + '?token=' + token; }
+
+async function copyLink(token) {
+  const url = getFormUrl(token);
+  try { await navigator.clipboard.writeText(url); showToast('✅ Link copiado!', 'success'); }
+  catch { showToast('Não foi possível copiar. Link: ' + url, 'info', 6000); }
+}
+
+async function resendMail(token, nome) {
+  showToast('Enviando e-mail para ' + nome + '...', 'info');
+  try {
+    const data = await apiGet({ action: 'resendEmail', token });
+    if (data.success) showToast('✅ E-mail reenviado com sucesso!', 'success');
+    else showToast('Erro: ' + (data.error || 'Falha ao enviar'), 'error');
+  } catch(e) { showToast('Erro ao enviar e-mail.', 'error'); }
+}
+
+async function viewDetails(token, nome) {
+  document.getElementById('detailsModalTitle').textContent = 'Dados — ' + nome;
+  document.getElementById('detailsModalBody').innerHTML = '<p style="text-align:center;color:var(--text-3);padding:40px;">Carregando...</p>';
+  openModal('detailsModal');
+  try {
+    let data;
+    if (APPS_SCRIPT_URL.includes('COLE')) {
+      data = {
+        success: true,
+        response: {
+          NomeCompleto: nome,
+          NomeSocial: "",
+          CPF: "123.456.789-00",
+          RG: "12.345.678-9",
+          EstadoCivil: "Casado(a)",
+          TítuloEleitor: "123456789012",
+          WhatsApp: "(71) 98765-4321",
+          Email: "candidato.mock@email.com",
+          'Endereço': "Av. das Nações Unidas, 123",
+          BairroCidade: "Pinheiros / São Paulo - SP",
+          CEP: "05425-070",
+          EmergenciaNome: "Maria da Silva (Esposa)",
+          EmergenciaTel: "(11) 91234-5678",
+          OptanteVT: "Sim",
+          'PlanoSaúde': "Opto pelo plano de saúde com inclusão de dependente(s), e autorizo o empregador a descontar mensalmente em folha de pagamento os valores correspondentes de mensalidade e coparticipação.",
+          'NúmeroBota': "41",
+          TamanhoCamisa: "G",
+          'TamanhoCalça': "M",
+          PossuiFilhos: "Sim",
+          DeclararIR: "Sim",
+          DependentesIR: "Pedro Silva (Filho) | CPF: 987.654.321-99 | Parentesco: Filho",
+          DataPreenchimento: "06/07/2026 14:30"
+        }
+      };
+    } else {
+      data = await apiGet({ action: 'getResponse', token });
+    }
+    if (data.error) { document.getElementById('detailsModalBody').innerHTML = '<p style="color:var(--danger);padding:20px;">Erro: ' + esc(data.error) + '</p>'; return; }
+    const r = data.response || {};
+    document.getElementById('detailsModalBody').innerHTML = `
+      <div class="details-section">
+        <div class="details-section-title">Identificação Pessoal</div>
+        <div class="details-grid">
+          <div class="detail-item full"><div class="dk">Nome Completo</div><div class="dv">${esc(r.NomeCompleto)}</div></div>
+          <div class="detail-item"><div class="dk">CPF</div><div class="dv">${esc(r.CPF)}</div></div>
+          <div class="detail-item"><div class="dk">RG</div><div class="dv">${esc(r.RG)}</div></div>
+          <div class="detail-item"><div class="dk">Estado Civil</div><div class="dv">${esc(r.EstadoCivil)}</div></div>
+          <div class="detail-item"><div class="dk">Título de Eleitor</div><div class="dv">${esc(r.TítuloEleitor)}</div></div>
+        </div>
+      </div>
+      <div class="details-section">
+        <div class="details-section-title">Contato & Endereço</div>
+        <div class="details-grid">
+          <div class="detail-item"><div class="dk">WhatsApp</div><div class="dv">${esc(r.WhatsApp)}</div></div>
+          <div class="detail-item"><div class="dk">E-mail</div><div class="dv">${esc(r.Email)}</div></div>
+          <div class="detail-item full"><div class="dk">Endereço</div><div class="dv">${esc(r['Endereço'])}, ${esc(r.BairroCidade)} — CEP: ${esc(r.CEP)}</div></div>
+          <div class="detail-item"><div class="dk">Contato de Emergência</div><div class="dv">${esc(r.EmergenciaNome)}</div></div>
+          <div class="detail-item"><div class="dk">Telefone Emergência</div><div class="dv">${esc(r.EmergenciaTel)}</div></div>
+        </div>
+      </div>
+      <div class="details-section">
+        <div class="details-section-title">Benefícios & Fardamento</div>
+        <div class="details-grid">
+          <div class="detail-item"><div class="dk">Optante VT</div><div class="dv">${esc(r.OptanteVT)}</div></div>
+          <div class="detail-item"><div class="dk">Plano de Saúde</div><div class="dv">${esc(r['PlanoSaúde'])}</div></div>
+          <div class="detail-item"><div class="dk">Número da Bota</div><div class="dv">${esc(r['NúmeroBota'])}</div></div>
+          <div class="detail-item"><div class="dk">Tamanho Camisa</div><div class="dv">${esc(r.TamanhoCamisa)}</div></div>
+          <div class="detail-item"><div class="dk">Tamanho Calça</div><div class="dv">${esc(r['TamanhoCalça'])}</div></div>
+        </div>
+      </div>
+      <div class="details-section">
+        <div class="details-section-title">Dependentes</div>
+        <div class="details-grid">
+          <div class="detail-item"><div class="dk">Possui Filhos</div><div class="dv">${esc(r.PossuiFilhos)}</div></div>
+          <div class="detail-item"><div class="dk">Declarar IR</div><div class="dv">${esc(r.DeclararIR)}</div></div>
+          <div class="detail-item full"><div class="dk">Dependentes IR</div><div class="dv" style="white-space:pre-wrap;">${esc(r.DependentesIR) || '—'}</div></div>
+        </div>
+      </div>
+      <div style="background:var(--bg);border-radius:8px;padding:12px 14px;text-align:center;margin-top:8px;">
+        <span style="font-size:12px;color:var(--text-3);">Preenchido em: <strong>${esc(r.DataPreenchimento)}</strong></span>
+      </div>`;
+  } catch(e) { document.getElementById('detailsModalBody').innerHTML = '<p style="color:var(--danger);padding:20px;">Erro ao carregar dados.</p>'; }
+}
+
+// ============================================================
+// ADICIONAR CANDIDATO
+// ============================================================
+function openAddModal() {
+  document.getElementById('inputNome').value = '';
+  document.getElementById('inputEmail').value = '';
+  document.getElementById('inputVaga').value = '';
+  document.getElementById('checkSendEmail').checked = true;
+  document.getElementById('successLinkBox').style.display = 'none';
+  document.getElementById('addModalFooter').style.display = 'flex';
+  document.getElementById('btnSaveCandidate').disabled = false;
+  openModal('addModal');
+  setTimeout(() => document.getElementById('inputNome').focus(), 200);
+}
+
+let lastGenToken = '';
+async function saveCandidate() {
+  const nome  = document.getElementById('inputNome').value.trim();
+  const email = document.getElementById('inputEmail').value.trim();
+  const vaga  = document.getElementById('inputVaga').value.trim();
+  const send  = document.getElementById('checkSendEmail').checked;
+
+  if (!nome || !email || !vaga) { showToast('Preencha todos os campos obrigatórios.', 'warning'); return; }
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { showToast('E-mail inválido.', 'warning'); return; }
+
+  const btn = document.getElementById('btnSaveCandidate');
+  btn.disabled = true;
+  btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="15" height="15" style="animation:spin .8s linear infinite"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.88"/></svg> Salvando...';
+
+  if (APPS_SCRIPT_URL.includes('COLE')) {
+    // Simulação local
+    setTimeout(() => {
+      const id = Date.now().toString();
+      const token = "mockToken_" + id;
+      const mockUrl = getFormUrl(token);
+      
+      state.candidates.unshift({
+        id: id,
+        nome: nome,
+        email: email,
+        vaga: vaga,
+        token: token,
+        status: "Pendente",
+        dataEnvio: new Date().toLocaleDateString('pt-BR') + " " + new Date().toLocaleTimeString('pt-BR', {hour: '2-digit', minute:'2-digit'}),
+        dataPreenchimento: ""
+      });
+      
+      lastGenToken = token;
+      state.lastGenLink = mockUrl;
+      document.getElementById('generatedLink').textContent = mockUrl;
+      document.getElementById('emailStatus').textContent = send ? '📧 E-mail de convite enviado (Simulação)!' : '';
+      document.getElementById('successLinkBox').style.display = 'block';
+      document.getElementById('addModalFooter').style.display = 'none';
+      
+      updateStats();
+      populateVagaFilter();
+      applyFilters();
+      renderDashboardTable();
+    }, 500);
+    return;
+  }
+
+  try {
+    const params = { action: 'addCandidate', nome, email, vaga, sendEmail: send ? 'true' : 'false' };
+    const data = await apiGet(params);
+    if (data.error) { showToast('Erro: ' + data.error, 'error'); btn.disabled = false; btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="15" height="15"><polyline points="20 6 9 17 4 12"/></svg> Cadastrar'; return; }
+
+    lastGenToken = data.token;
+    state.lastGenLink = data.formUrl || getFormUrl(data.token);
+    document.getElementById('generatedLink').textContent = state.lastGenLink;
+    const emailStatus = document.getElementById('emailStatus');
+    if (send) emailStatus.textContent = data.emailSent ? '📧 E-mail enviado!' : '⚠️ E-mail não enviado: ' + (data.emailError || 'verifique o endereço.');
+    else emailStatus.textContent = '';
+    document.getElementById('successLinkBox').style.display = 'block';
+    document.getElementById('addModalFooter').style.display = 'none';
+    loadCandidates();
+  } catch(e) {
+    showToast('Erro ao cadastrar candidato.', 'error');
+    btn.disabled = false;
+    btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="15" height="15"><polyline points="20 6 9 17 4 12"/></svg> Cadastrar';
+  }
+}
+
+async function copyGeneratedLink() {
+  try { await navigator.clipboard.writeText(state.lastGenLink); showToast('✅ Link copiado!', 'success'); }
+  catch { showToast('Link: ' + state.lastGenLink, 'info', 8000); }
+}
+
+function sendWhatsApp() {
+  const msg = encodeURIComponent('Olá! Segue o link para preenchimento da sua Ficha de Admissão na Premier Logistics:\n\n' + state.lastGenLink + '\n\nEste link é pessoal e intransferível.');
+  window.open('https://wa.me/?text=' + msg, '_blank');
+}
+
+// ============================================================
+// EXCLUIR CANDIDATO
+// ============================================================
+function confirmDelete(token, nome) {
+  state.pendingDelete = token;
+  document.getElementById('confirmText').textContent = 'Você está prestes a excluir o candidato "' + nome + '". Esta ação não pode ser desfeita.';
+  document.getElementById('btnConfirmDelete').onclick = async () => {
+    if (APPS_SCRIPT_URL.includes('COLE')) {
+      state.candidates = state.candidates.filter(c => c.token !== state.pendingDelete);
+      showToast('✅ Candidato excluído (Simulação).', 'success');
+      closeModal('confirmModal');
+      updateStats();
+      populateVagaFilter();
+      applyFilters();
+      renderDashboardTable();
+      return;
+    }
+    try {
+      const data = await apiGet({ action: 'deleteCandidate', token: state.pendingDelete });
+      if (data.success) { showToast('✅ Candidato excluído.', 'success'); closeModal('confirmModal'); loadCandidates(); }
+      else showToast('Erro: ' + data.error, 'error');
+    } catch(e) { showToast('Erro ao excluir.', 'error'); }
+  };
+  openModal('confirmModal');
+}
+
+// ============================================================
+// EXPORTAR EXCEL
+// ============================================================
+async function exportExcel() {
+  showToast('Gerando planilha...', 'info');
+  try {
+    const wb = XLSX.utils.book_new();
+
+    // Aba 1: Controle de Candidatos
+    const ctrlData = [
+      ['ID','Nome','E-mail','Vaga','Token','Status','Data de Envio','Data de Preenchimento'],
+      ...state.candidates.map(c => [c.id, c.nome, c.email, c.vaga, c.token, c.status, c.dataEnvio, c.dataPreenchimento])
+    ];
+    const ws1 = XLSX.utils.aoa_to_sheet(ctrlData);
+    ws1['!cols'] = [10,30,35,25,26,12,18,18].map(w => ({ wch: w }));
+    XLSX.utils.book_append_sheet(wb, ws1, 'Controle de Candidatos');
+
+    // Aba 2: Dados dos Formulários (busca do servidor)
+    try {
+      let resp;
+      if (APPS_SCRIPT_URL.includes('COLE')) {
+        resp = {
+          success: true,
+          responses: state.candidates.filter(c => c.status === 'Concluído').map(c => ({
+            Token: c.token,
+            DataPreenchimento: c.dataPreenchimento,
+            NomeCandidato: c.nome,
+            NomeCompleto: c.nome,
+            NomeSocial: "",
+            CPF: "123.456.789-00",
+            RG: "12.345.678-9",
+            'Endereço': "Rua das Flores, 100",
+            BairroCidade: "Brotas / Salvador - BA",
+            CEP: "40285-000",
+            WhatsApp: "(71) 99999-8888",
+            Email: c.email,
+            EmergenciaNome: "Maria Souza",
+            EmergenciaTel: "(71) 98888-7777",
+            TítuloEleitor: "123456789012",
+            GrauInstrução: "Superior Completo",
+            PossuiFilhos: "Não",
+            QtdFilhos: "0",
+            DeclararIR: "Não",
+            QtdDepIR: "0",
+            DependentesIR: "",
+            EstadoCivil: "Solteiro(a)",
+            EstadoCivilOutro: "",
+            'NúmeroBota': "40",
+            TamanhoCamisa: "M",
+            'TamanhoCalça': "M",
+            OptanteVT: "Não",
+            'PlanoSaúde': "Opto pelo plano de saúde com inclusão de dependente(s), e autorizo o empregador a descontar mensalmente em folha de pagamento os valores correspondentes de mensalidade e coparticipação.",
+            Dep1Nome: "",
+            Dep1CPF: "",
+            Dep2Nome: "",
+            Dep2CPF: "",
+            TipoAssinatura: "texto"
+          }))
+        };
+      } else {
+        resp = await apiGet({ action: 'getResponses' });
+      }
+      if (resp.success && resp.responses.length > 0) {
+        const headers = Object.keys(resp.responses[0]);
+        const rows    = resp.responses.map(r => headers.map(h => r[h] || ''));
+        const ws2     = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+        ws2['!cols']  = headers.map(() => ({ wch: 20 }));
+        XLSX.utils.book_append_sheet(wb, ws2, 'Respostas do Formulário');
+      }
+    } catch(e) { /* sem respostas ainda */ }
+
+    const date = new Date().toLocaleDateString('pt-BR').replace(/\//g,'-');
+    XLSX.writeFile(wb, 'Premier_RH_Candidatos_' + date + '.xlsx');
+    showToast('✅ Planilha exportada com sucesso!', 'success');
+  } catch(e) { showToast('Erro ao exportar: ' + e.message, 'error'); }
+}
+
+// ============================================================
+// MODAIS
+// ============================================================
+function openModal(id)  { document.getElementById(id).classList.add('open'); document.body.style.overflow = 'hidden'; }
+function closeModal(id) { document.getElementById(id).classList.remove('open'); document.body.style.overflow = ''; }
+document.querySelectorAll('.modal-overlay').forEach(el => {
+  el.addEventListener('click', e => { if (e.target === el) closeModal(el.id); });
+});
+document.addEventListener('keydown', e => { if (e.key === 'Escape') document.querySelectorAll('.modal-overlay.open').forEach(el => closeModal(el.id)); });
+
+// ============================================================
+// TOAST
+// ============================================================
+let toastTimer;
+function showToast(msg, type = 'info', dur = 3500) {
+  clearTimeout(toastTimer);
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = 'show ' + type;
+  toastTimer = setTimeout(() => { el.className = ''; }, dur);
+}
+
+// ============================================================
+// AUTO-REFRESH (a cada 60 segundos)
+// ============================================================
+if (sessionStorage.getItem('rh_auth') === '1') {
+  setInterval(loadCandidates, 60000);
+}
+
+// Inicializar se já logado
+if (sessionStorage.getItem('rh_auth') === '1') {
+  loadCandidates();
+}
+</script>
+</body>
+</html>
