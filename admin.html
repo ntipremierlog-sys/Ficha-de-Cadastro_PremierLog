@@ -1137,6 +1137,33 @@ function statusBadge(s) {
   return '<span class="badge badge-pending">Pendente</span>';
 }
 
+function formatDisplayDate(dateStr) {
+  if (!dateStr) return '<span style="color:var(--text-3)">—</span>';
+  
+  try {
+    const reCompact = /^(\d{2})\/(\d{2})\/(\d{4})\s+(\d{2}):(\d{2})$/;
+    if (reCompact.test(dateStr)) {
+      return dateStr.replace(reCompact, '$1/$2/$3 às $4:$5');
+    }
+    
+    // Parse ISO string
+    const d = new Date(dateStr);
+    if (!isNaN(d.getTime())) {
+      const pad = (n) => String(n).padStart(2, '0');
+      const day = pad(d.getDate());
+      const month = pad(d.getMonth() + 1);
+      const year = d.getFullYear();
+      const hours = pad(d.getHours());
+      const minutes = pad(d.getMinutes());
+      return `${day}/${month}/${year} às ${hours}:${minutes}`;
+    }
+  } catch (err) {
+    console.error("Error formatting date:", err);
+  }
+  
+  return dateStr;
+}
+
 function renderDashboardTable() {
   const tbody = document.getElementById('dashboardTableBody');
   const list  = state.candidates.slice(0, 5);
@@ -1146,7 +1173,7 @@ function renderDashboardTable() {
       <td class="td-nome"><strong>${esc(c.nome)}</strong><span>${esc(c.email)}</span></td>
       <td>${esc(c.vaga)}</td>
       <td>${statusBadge(c.status)}</td>
-      <td class="td-date">${esc(c.dataEnvio)}</td>
+      <td class="td-date">${formatDisplayDate(c.dataEnvio)}</td>
       <td class="td-actions">${actionBtns(c)}</td>
     </tr>`).join('');
 }
@@ -1160,8 +1187,8 @@ function renderCandidatesTable() {
       <td class="td-nome"><strong>${esc(c.nome)}</strong><span>${esc(c.email)}</span></td>
       <td>${esc(c.vaga)}</td>
       <td>${statusBadge(c.status)}</td>
-      <td class="td-date">${esc(c.dataEnvio)}</td>
-      <td class="td-date">${c.dataPreenchimento ? esc(c.dataPreenchimento) : '<span style="color:var(--text-3)">—</span>'}</td>
+      <td class="td-date">${formatDisplayDate(c.dataEnvio)}</td>
+      <td class="td-date">${formatDisplayDate(c.dataPreenchimento)}</td>
       <td class="td-actions">${actionBtns(c)}</td>
     </tr>`).join('');
 }
