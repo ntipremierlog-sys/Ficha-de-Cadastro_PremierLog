@@ -6,22 +6,22 @@
   <title>Painel de Controle — RH Premier Logistics</title>
   <meta name="description" content="Painel administrativo de controle de fichas de admissão — Premier Logistics" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
   <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
   <style>
     /* ===================================================
        VARIÁVEIS & RESET
-    =================================================== */
+     =================================================== */
     :root {
       --navy:       #211551;
-      --navy-dark:  #160e38;
-      --navy-mid:   #2d1d6e;
-      --navy-light: #3a2585;
-      --gold:       #cfb07e;
-      --gold-light: #e6d5b8;
-      --orange:     #cfb07e;
-      --orange-dk:  #bda06f;
+      --navy-dark:  #150d36;
+      --navy-mid:   #1d1248;
+      --navy-light: #3c2980;
+      --gold:       #CCA352;
+      --gold-light: #F7EEDB;
+      --orange:     #CCA352;
+      --orange-dk:  #B58E3C;
       --bg:         #f0f4fa;
       --white:      #ffffff;
       --text:       #1e293b;
@@ -41,7 +41,8 @@
     }
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     html, body { height: 100%; font-family: 'Inter', sans-serif; background: var(--bg); color: var(--text); font-size: 14px; }
-    button { cursor: pointer; font-family: inherit; border: none; outline: none; }
+    h1, h2, h3, h4, h5, h6 { font-family: 'Montserrat', sans-serif; }
+    button { cursor: pointer; font-family: inherit; border: none; outline: none; }one; }
     input, select, textarea { font-family: inherit; outline: none; border: none; }
     a { text-decoration: none; color: inherit; }
     ul { list-style: none; }
@@ -662,7 +663,7 @@
   <div class="login-card">
     <div class="login-logo" style="margin-bottom: 24px;">
       <div style="margin-bottom: 12px; display: flex; justify-content: center; width: 100%;">
-        <img src="Premier - Marca-01.png" alt="Premier Logistics Logo" style="max-height: 80px; width: auto;" />
+        <img src="Premier - Marca-01.png" alt="Premier Logistics Logo" style="max-height: 105px; width: auto;" />
       </div>
       <span class="login-subtitle">Painel de Controle — Recursos Humanos</span>
     </div>
@@ -691,7 +692,7 @@
     <aside class="sidebar">
       <div class="sidebar-brand" style="padding: 24px 16px; border-bottom: 1px solid rgba(255,255,255,.07);">
         <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; width: 100%;">
-          <img src="Premier - Marca-04.png" alt="Premier Logistics" style="max-height: 98px; max-width: 100%; object-fit: contain; margin-bottom: 4px;" />
+          <img src="Premier - Marca-04.png" alt="Premier Logistics" style="max-height: 125px; max-width: 100%; object-fit: contain; margin-bottom: 4px;" />
           <span style="font-size: 9.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 1.5px; color: rgba(255,255,255,.38); margin-top: 4px;">Painel de Admissão</span>
         </div>
       </div>
@@ -737,7 +738,7 @@
           <button class="btn-refresh" id="btnRefresh" onclick="loadCandidates()" title="Atualizar">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.88"/></svg>
           </button>
-          <button class="btn-excel" onclick="exportExcel()" title="Exportar para Excel">
+          <button class="btn-excel" onclick="openExportModal()" title="Exportar para Excel">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="16" y2="17"/></svg>
             Exportar Excel
           </button>
@@ -835,8 +836,11 @@
                   <option value="Pendente">🟡 Pendentes</option>
                   <option value="Concluído">🟢 Concluídos</option>
                 </select>
-                <select class="filter-select" id="vagaFilter" onchange="applyFilters()">
-                  <option value="">Todas as vagas</option>
+                <select class="filter-select" id="funcaoFilter" onchange="applyFilters()">
+                  <option value="">Todas as funções</option>
+                </select>
+                <select class="filter-select" id="contratoFilter" onchange="applyFilters()">
+                  <option value="">Todos os contratos</option>
                 </select>
               </div>
             </div>
@@ -889,12 +893,14 @@
         <label class="form-label" for="selectContrato">Contrato *</label>
         <select class="form-input" id="selectContrato" style="padding: 10px; border-radius: 8px; border: 1.5px solid var(--border); font-size: 13.5px; width: 100%; font-family: inherit; color: var(--text); background: white;">
           <option value="">Selecione um contrato...</option>
-          <option value="206 - CAJAMAR">206 - CAJAMAR</option>
-          <option value="206 - RODOANEL">206 - RODOANEL</option>
-          <option value="1268 - SALVADOR">1268 - SALVADOR</option>
-          <option value="158 - TECA SALVADOR">158 - TECA SALVADOR</option>
-          <option value="778 - GUARULHOS">778 - GUARULHOS</option>
-          <option value="618 - INDAIATUBA">618 - INDAIATUBA</option>
+          <option value="206 - Cajamar">206 - Cajamar</option>
+          <option value="206 - Rodoanel">206 - Rodoanel</option>
+          <option value="1268 - Salvador">1268 - Salvador</option>
+          <option value="158 - Teca Salvador">158 - Teca Salvador</option>
+          <option value="778 - Guarulhos">778 - Guarulhos</option>
+          <option value="618 - Indaiatuba">618 - Indaiatuba</option>
+          <option value="Petrobras">Petrobras</option>
+          <option value="Administração">Administração</option>
         </select>
       </div>
       <label class="form-check" id="emailCheck">
@@ -960,6 +966,43 @@
     <div class="modal-footer">
       <button class="btn-cancel" onclick="closeModal('confirmModal')">Cancelar</button>
       <button class="btn-delete-confirm" id="btnConfirmDelete">Excluir</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== MODAL: EXPORTAR EXCEL ===================== -->
+<div class="modal-overlay" id="exportModal">
+  <div class="modal" style="max-width:420px;">
+    <div class="modal-header">
+      <h3>Exportar Relatório Excel</h3>
+      <button class="btn-close" onclick="closeModal('exportModal')">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label" for="exportFilterType">Filtrar por tipo de data</label>
+        <select class="form-input" id="exportFilterType" onchange="toggleExportDateFields()" style="padding: 10px; border-radius: 8px; border: 1.5px solid var(--border); font-size: 13.5px; width: 100%; font-family: inherit; color: var(--text); background: white;">
+          <option value="todos">Exportar Tudo (Sem Filtro)</option>
+          <option value="envio">Data de Cadastro/Envio</option>
+          <option value="preenchimento">Data de Preenchimento</option>
+        </select>
+      </div>
+      <div id="exportDateRangeFields" style="display:none; margin-top: 15px;">
+        <div class="form-group">
+          <label class="form-label" for="exportStartDate">Data Inicial</label>
+          <input class="form-input" id="exportStartDate" type="date" style="padding: 10px; border-radius: 8px; border: 1.5px solid var(--border); font-size: 13.5px; width: 100%; font-family: inherit; color: var(--text); background: white;" />
+        </div>
+        <div class="form-group" style="margin-top: 15px;">
+          <label class="form-label" for="exportEndDate">Data Final</label>
+          <input class="form-input" id="exportEndDate" type="date" style="padding: 10px; border-radius: 8px; border: 1.5px solid var(--border); font-size: 13.5px; width: 100%; font-family: inherit; color: var(--text); background: white;" />
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-cancel" onclick="closeModal('exportModal')">Cancelar</button>
+      <button class="btn-confirm" id="btnConfirmExport" onclick="doExportExcel()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="15" height="15"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+        Exportar
+      </button>
     </div>
   </div>
 </div>
@@ -1069,7 +1112,7 @@ async function loadCandidates() {
       }
       
       updateStats();
-      populateVagaFilter();
+      populateFilters();
       applyFilters();
       renderDashboardTable();
       
@@ -1088,7 +1131,7 @@ async function loadCandidates() {
     if (data.error) { showToast('Erro: ' + data.error, 'error'); return; }
     state.candidates = data.candidates || [];
     updateStats();
-    populateVagaFilter();
+    populateFilters();
     applyFilters();
     renderDashboardTable();
     const badge = document.getElementById('sidebarBadge');
@@ -1120,22 +1163,83 @@ function updateStats() {
 // ============================================================
 // FILTROS
 // ============================================================
-function populateVagaFilter() {
-  const vagas = [...new Set(state.candidates.map(c => c.vaga).filter(Boolean))].sort();
-  const sel = document.getElementById('vagaFilter');
-  const curr = sel.value;
-  sel.innerHTML = '<option value="">Todas as vagas</option>';
-  vagas.forEach(v => { const o = document.createElement('option'); o.value = v; o.textContent = v; if (v === curr) o.selected = true; sel.appendChild(o); });
+function formatContractName(contrato) {
+  if (!contrato) return '';
+  return contrato.toLowerCase().replace(/(?:^|\s|-)\S/g, function(a) { return a.toUpperCase(); });
+}
+
+function formatVagaDisplay(vaga) {
+  const { funcao, contrato } = extractVagaParts(vaga);
+  if (!contrato) return funcao;
+  return `${funcao} - ${contrato}`;
+}
+
+function extractVagaParts(vaga) {
+  if (!vaga) return { funcao: '', contrato: '' };
+  const idx = vaga.indexOf(' - ');
+  if (idx === -1) {
+    return { funcao: vaga.trim(), contrato: '' };
+  }
+  const funcao = vaga.substring(0, idx).trim();
+  let contrato = vaga.substring(idx + 3).trim();
+  contrato = formatContractName(contrato);
+  return { funcao, contrato };
+}
+
+function populateFilters() {
+  const funcoes = new Set();
+  const contratos = new Set();
+  
+  state.candidates.forEach(c => {
+    const { funcao, contrato } = extractVagaParts(c.vaga);
+    if (funcao) funcoes.add(funcao);
+    if (contrato) contratos.add(contrato);
+  });
+  
+  const sortedFuncoes = [...funcoes].sort();
+  const sortedContratos = [...contratos].sort();
+  
+  const selFuncao = document.getElementById('funcaoFilter');
+  if (selFuncao) {
+    const currFuncao = selFuncao.value;
+    selFuncao.innerHTML = '<option value="">Todas as funções</option>';
+    sortedFuncoes.forEach(f => {
+      const o = document.createElement('option');
+      o.value = f;
+      o.textContent = f;
+      if (f === currFuncao) o.selected = true;
+      selFuncao.appendChild(o);
+    });
+  }
+  
+  const selContrato = document.getElementById('contratoFilter');
+  if (selContrato) {
+    const currContrato = selContrato.value;
+    selContrato.innerHTML = '<option value="">Todos os contratos</option>';
+    sortedContratos.forEach(c => {
+      const o = document.createElement('option');
+      o.value = c;
+      o.textContent = c;
+      if (c === currContrato) o.selected = true;
+      selContrato.appendChild(o);
+    });
+  }
 }
 
 function applyFilters() {
-  const q     = (document.getElementById('searchInput').value || '').toLowerCase().trim();
-  const stt   = document.getElementById('statusFilter').value;
-  const vaga  = document.getElementById('vagaFilter').value;
+  const q        = (document.getElementById('searchInput').value || '').toLowerCase().trim();
+  const stt      = document.getElementById('statusFilter').value;
+  const fFilter  = document.getElementById('funcaoFilter').value;
+  const cFilter  = document.getElementById('contratoFilter').value;
+  
   state.filtered = state.candidates.filter(c => {
-    if (q   && !(c.nome + c.email).toLowerCase().includes(q)) return false;
+    if (q && !(c.nome + c.email).toLowerCase().includes(q)) return false;
     if (stt && c.status !== stt) return false;
-    if (vaga && c.vaga !== vaga) return false;
+    
+    const { funcao, contrato } = extractVagaParts(c.vaga);
+    if (fFilter && funcao !== fFilter) return false;
+    if (cFilter && contrato !== cFilter) return false;
+    
     return true;
   });
   renderCandidatesTable();
@@ -1162,11 +1266,12 @@ function formatDisplayDate(dateStr) {
     const d = new Date(dateStr);
     if (!isNaN(d.getTime())) {
       const pad = (n) => String(n).padStart(2, '0');
-      const day = pad(d.getDate());
-      const month = pad(d.getMonth() + 1);
-      const year = d.getFullYear();
-      const hours = pad(d.getHours());
-      const minutes = pad(d.getMinutes());
+      // Usar métodos UTC para evitar que o navegador aplique o offset de fuso horário local
+      const day = pad(d.getUTCDate());
+      const month = pad(d.getUTCMonth() + 1);
+      const year = d.getUTCFullYear();
+      const hours = pad(d.getUTCHours());
+      const minutes = pad(d.getUTCMinutes());
       return `${day}/${month}/${year} às ${hours}:${minutes}`;
     }
   } catch (err) {
@@ -1183,7 +1288,7 @@ function renderDashboardTable() {
   tbody.innerHTML = list.map(c => `
     <tr>
       <td class="td-nome"><strong>${esc(c.nome)}</strong><span>${esc(c.email)}</span></td>
-      <td>${esc(c.vaga)}</td>
+      <td>${esc(formatVagaDisplay(c.vaga))}</td>
       <td>${statusBadge(c.status)}</td>
       <td class="td-date">${formatDisplayDate(c.dataEnvio)}</td>
       <td class="td-actions">${actionBtns(c)}</td>
@@ -1197,7 +1302,7 @@ function renderCandidatesTable() {
   tbody.innerHTML = list.map(c => `
     <tr>
       <td class="td-nome"><strong>${esc(c.nome)}</strong><span>${esc(c.email)}</span></td>
-      <td>${esc(c.vaga)}</td>
+      <td>${esc(formatVagaDisplay(c.vaga))}</td>
       <td>${statusBadge(c.status)}</td>
       <td class="td-date">${formatDisplayDate(c.dataEnvio)}</td>
       <td class="td-date">${formatDisplayDate(c.dataPreenchimento)}</td>
@@ -1397,7 +1502,7 @@ async function saveCandidate() {
       document.getElementById('addModalFooter').style.display = 'none';
       
       updateStats();
-      populateVagaFilter();
+      populateFilters();
       applyFilters();
       renderDashboardTable();
     }, 500);
@@ -1479,7 +1584,7 @@ function confirmDelete(token, nome) {
       showToast('✅ Candidato excluído (Simulação).', 'success');
       closeModal('confirmModal');
       updateStats();
-      populateVagaFilter();
+      populateFilters();
       applyFilters();
       renderDashboardTable();
       return;
@@ -1494,17 +1599,101 @@ function confirmDelete(token, nome) {
 }
 
 // ============================================================
-// EXPORTAR EXCEL
+// EXPORTAR EXCEL COM FILTRO DE DATA
 // ============================================================
-async function exportExcel() {
+function openExportModal() {
+  document.getElementById('exportFilterType').value = 'todos';
+  document.getElementById('exportStartDate').value = '';
+  document.getElementById('exportEndDate').value = '';
+  toggleExportDateFields();
+  openModal('exportModal');
+}
+
+function toggleExportDateFields() {
+  const type = document.getElementById('exportFilterType').value;
+  const rangeFields = document.getElementById('exportDateRangeFields');
+  if (type === 'todos') {
+    rangeFields.style.display = 'none';
+  } else {
+    rangeFields.style.display = 'block';
+  }
+}
+
+function parseDateString(str) {
+  if (!str) return null;
+  
+  // 1. Verificar formato compacto brasileiro primeiro (dd/MM/yyyy HH:mm)
+  // Isso evita que o navegador interprete erroneamente dd/MM/yyyy como MM/dd/yyyy
+  const reCompact = /^(\d{2})\/(\d{2})\/(\d{4})(?:\s+(\d{2}):(\d{2}))?$/;
+  const match = String(str).trim().match(reCompact);
+  if (match) {
+    const day = parseInt(match[1], 10);
+    const month = parseInt(match[2], 10) - 1;
+    const year = parseInt(match[3], 10);
+    const hours = match[4] ? parseInt(match[4], 10) : 0;
+    const minutes = match[5] ? parseInt(match[5], 10) : 0;
+    return new Date(year, month, day, hours, minutes);
+  }
+
+  // 2. Se for formato ISO string (yyyy-MM-ddTHH:mm:ss...)
+  const d = new Date(str);
+  if (!isNaN(d.getTime())) {
+    // Retorna um objeto Date local mapeando os mesmos valores de calendário UTC
+    return new Date(
+      d.getUTCFullYear(),
+      d.getUTCMonth(),
+      d.getUTCDate(),
+      d.getUTCHours(),
+      d.getUTCMinutes(),
+      d.getUTCSeconds()
+    );
+  }
+  
+  return null;
+}
+
+async function doExportExcel() {
+  closeModal('exportModal');
   showToast('Gerando planilha...', 'info');
+  
   try {
+    const filterType = document.getElementById('exportFilterType').value;
+    const startVal = document.getElementById('exportStartDate').value;
+    const endVal = document.getElementById('exportEndDate').value;
+    
+    let filteredCandidates = [...state.candidates];
+    let isFiltered = (filterType !== 'todos');
+    
+    if (isFiltered) {
+      if (!startVal && !endVal) {
+        showToast('Selecione pelo menos uma data inicial ou final.', 'warning');
+        return;
+      }
+      
+      const startDate = startVal ? new Date(startVal + 'T00:00:00') : null;
+      const endDate = endVal ? new Date(endVal + 'T23:59:59') : null;
+      
+      filteredCandidates = state.candidates.filter(c => {
+        let dateToCompare = null;
+        if (filterType === 'envio') {
+          dateToCompare = parseDateString(c.dataEnvio);
+        } else if (filterType === 'preenchimento') {
+          dateToCompare = parseDateString(c.dataPreenchimento);
+        }
+        
+        if (!dateToCompare) return false;
+        if (startDate && dateToCompare < startDate) return false;
+        if (endDate && dateToCompare > endDate) return false;
+        return true;
+      });
+    }
+    
     const wb = XLSX.utils.book_new();
 
     // Aba 1: Controle de Candidatos
     const ctrlData = [
       ['ID','Nome','E-mail','Vaga','Token','Status','Data de Envio','Data de Preenchimento'],
-      ...state.candidates.map(c => [c.id, c.nome, c.email, c.vaga, c.token, c.status, c.dataEnvio, c.dataPreenchimento])
+      ...filteredCandidates.map(c => [c.id, c.nome, c.email, formatVagaDisplay(c.vaga), c.token, c.status, c.dataEnvio, c.dataPreenchimento])
     ];
     const ws1 = XLSX.utils.aoa_to_sheet(ctrlData);
     ws1['!cols'] = [10,30,35,25,26,12,18,18].map(w => ({ wch: w }));
@@ -1555,19 +1744,33 @@ async function exportExcel() {
       } else {
         resp = await apiGet({ action: 'getResponses' });
       }
+      
       if (resp.success && resp.responses.length > 0) {
-        const headers = Object.keys(resp.responses[0]);
-        const rows    = resp.responses.map(r => headers.map(h => r[h] || ''));
-        const ws2     = XLSX.utils.aoa_to_sheet([headers, ...rows]);
-        ws2['!cols']  = headers.map(() => ({ wch: 20 }));
-        XLSX.utils.book_append_sheet(wb, ws2, 'Respostas do Formulário');
+        let finalResponses = resp.responses;
+        if (isFiltered) {
+          const allowedTokens = new Set(filteredCandidates.map(c => c.token));
+          finalResponses = resp.responses.filter(r => allowedTokens.has(r.Token || r.token));
+        }
+        
+        if (finalResponses.length > 0) {
+          const headers = Object.keys(finalResponses[0]);
+          const rows    = finalResponses.map(r => headers.map(h => r[h] || ''));
+          const ws2     = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+          ws2['!cols']  = headers.map(() => ({ wch: 20 }));
+          XLSX.utils.book_append_sheet(wb, ws2, 'Respostas do Formulário');
+        }
       }
-    } catch(e) { /* sem respostas ainda */ }
+    } catch(e) { 
+      console.error("Erro ao processar respostas para Excel:", e); 
+    }
 
     const date = new Date().toLocaleDateString('pt-BR').replace(/\//g,'-');
-    XLSX.writeFile(wb, 'Premier_RH_Candidatos_' + date + '.xlsx');
+    const filenameType = isFiltered ? 'Filtrado' : 'Todos';
+    XLSX.writeFile(wb, `Premier_RH_Candidatos_${filenameType}_${date}.xlsx`);
     showToast('✅ Planilha exportada com sucesso!', 'success');
-  } catch(e) { showToast('Erro ao exportar: ' + e.message, 'error'); }
+  } catch(e) { 
+    showToast('Erro ao exportar: ' + e.message, 'error'); 
+  }
 }
 
 // ============================================================
