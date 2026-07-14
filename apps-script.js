@@ -10,7 +10,8 @@ const CONFIG = {
   FORM_URL:        'https://ntipremierlog-sys.github.io/Ficha-de-Cadastro_PremierLog/',
   ADMIN_SECRET:    'Premier2025AdminSecret!',
   EMAIL_FROM_NAME: 'RH — Premier Logistics',
-  EMAIL_SUBJECT:   'Premier Logistics — Ficha de Cadastro de Admissão'
+  EMAIL_SUBJECT:   'Premier Logistics — Ficha de Cadastro de Admissão',
+  DRIVE_FOLDER_ID: '1D4_gClsf_HTG57LKGDhqZbFFrKUqjQqX'  // Pasta Google Drive para os PDFs
 };
 
 const SHEET_CANDIDATES = 'Candidatos';
@@ -160,7 +161,8 @@ function getCandidates(secret) {
       token:             data[i][4] || '',
       status:            data[i][5] || 'Pendente',
       dataEnvio:         data[i][6] || '',
-      dataPreenchimento: data[i][7] || ''
+      dataPreenchimento: data[i][7] || '',
+      pdfUrl:            data[i][8] || ''
     });
   }
 
@@ -181,10 +183,22 @@ function getResponse(token, secret) {
   if (data.length <= 1) return { error: 'Nenhuma resposta encontrada' };
 
   var headers = data[0];
+
+  // Buscar pdfUrl na aba Candidatos
+  var pdfUrl = '';
+  try {
+    var cSheet2 = ss.getSheetByName(SHEET_CANDIDATES);
+    var cData2  = cSheet2.getDataRange().getValues();
+    for (var k = 1; k < cData2.length; k++) {
+      if (cData2[k][4] === token) { pdfUrl = cData2[k][8] || ''; break; }
+    }
+  } catch(e) {}
+
   for (var i = 1; i < data.length; i++) {
     if (data[i][0] === token) {
       var response = {};
       headers.forEach(function(h, j) { response[h] = data[i][j] || ''; });
+      response.pdfUrl = pdfUrl;
       return { success: true, response: response };
     }
   }
@@ -226,6 +240,7 @@ function submitForm(data) {
   var cData   = cSheet.getDataRange().getValues();
   var now     = formatDate(new Date());
   var candidateName = '';
+  var candidateRow  = -1;
 
   for (var i = 1; i < cData.length; i++) {
     if (cData[i][4] === token) {
@@ -233,7 +248,36 @@ function submitForm(data) {
       cSheet.getRange(i + 1, 6).setValue('Concluído');
       cSheet.getRange(i + 1, 8).setValue(now);
       candidateName = cData[i][1];
+      candidateRow  = i + 1;
       break;
+    }
+  }
+
+  // ============================================================
+  // SALVAR PDF NO GOOGLE DRIVE
+  // ============================================================
+  var pdfUrl = '';
+  var pdfError = '';
+  if (data.pdfBase64 && candidateName) {
+    try {
+      // Remove prefixo "data:application/pdf;base64,"
+      var base64Data = data.pdfBase64.replace(/^data:[^;]+;base64,/, '');
+      var pdfBytes   = Utilities.base64Decode(base64Data);
+      var pdfBlob    = Utilities.newBlob(pdfBytes, 'application/pdf',
+        'Ficha_Cadastro_' + candidateName.replace(/\s+/g, '_').substring(0, 30) + '.pdf');
+
+      var folder = DriveApp.getFolderById(CONFIG.DRIVE_FOLDER_ID);
+      var file   = folder.createFile(pdfBlob);
+      file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+      pdfUrl = 'https://drive.google.com/file/d/' + file.getId() + '/view';
+
+      // Registrar link na aba Candidatos (coluna 9 = índice 8)
+      if (candidateRow > 0) {
+        cSheet.getRange(candidateRow, 9).setValue(pdfUrl);
+      }
+    } catch (err) {
+      console.error('Erro ao salvar PDF no Drive:', err);
+      pdfError = err.message;
     }
   }
 
@@ -258,10 +302,10 @@ function submitForm(data) {
     fd.optanteVT || '', fd.planoSaudeOpcao || '',
     fd.dependente1Nome || '', fd.dependente1Cpf || '',
     fd.dependente2Nome || '', fd.dependente2Cpf || '',
-    fd.tipoAssinatura || ''
+    fd.tipoAssinatura || '', pdfUrl
   ]);
 
-  return { success: true, message: 'Formulário recebido com sucesso!' };
+  return { success: true, message: 'Formulário recebido com sucesso!', pdfUrl: pdfUrl, pdfError: pdfError };
 }
 
 // ============================================================
@@ -321,7 +365,7 @@ function ensureSheets() {
   var cs = ss.getSheetByName(SHEET_CANDIDATES);
   if (!cs) cs = ss.insertSheet(SHEET_CANDIDATES);
   if (cs.getLastRow() === 0) {
-    cs.appendRow(['ID','Nome','Email','Vaga','Token','Status','DataEnvio','DataPreenchimento']);
+    cs.appendRow(['ID','Nome','Email','Vaga','Token','Status','DataEnvio','DataPreenchimento','PDFUrl']);
     cs.setFrozenRows(1);
     cs.getRange('1:1').setFontWeight('bold').setBackground('#211551').setFontColor('white');
   }
@@ -333,7 +377,7 @@ function ensureSheets() {
       'Endereço','BairroCidade','CEP','WhatsApp','Email','EmergenciaNome','EmergenciaTel',
       'TítuloEleitor','GrauInstrução','PossuiFilhos','QtdFilhos','DeclararIR','QtdDepIR',
       'DependentesIR','EstadoCivil','EstadoCivilOutro','NúmeroBota','TamanhoCamisa',
-      'TamanhoCalça','OptanteVT','PlanoSaúde','Dep1Nome','Dep1CPF','Dep2Nome','Dep2CPF','TipoAssinatura']);
+      'TamanhoCalça','OptanteVT','PlanoSaúde','Dep1Nome','Dep1CPF','Dep2Nome','Dep2CPF','TipoAssinatura','PDFUrl']);
     rs.setFrozenRows(1);
     rs.getRange('1:1').setFontWeight('bold').setBackground('#211551').setFontColor('white');
   }

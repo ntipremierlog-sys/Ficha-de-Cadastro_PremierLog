@@ -70,7 +70,7 @@
 
   <!-- React code -->
   <script type="text/babel">
-    const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbz4IphjjiZ-OOLLLgeLJi8sa07ATlWlNtdJU5hqBHKnvugRT7s_qruXL7T-TYeAL5Doow/exec';
+    const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxZDdXHI7cPJ_j78ZV8dq-5ya8mI1tLZswO2cBsgb1Ukj8FtFPKZO-3GYohzuPZsY-Imw/exec';
 
     const { useState, useEffect, useRef } = React;
 
@@ -471,30 +471,8 @@
         setIsGenerating(true);
         setSuccessMessage(null);
 
-        // Enviar os dados ao Google Sheets antes de gerar/salvar o PDF
-        if (token && APPS_SCRIPT_URL !== 'COLE_A_URL_DO_APPS_SCRIPT_AQUI') {
-          try {
-            const submitResponse = await fetch(APPS_SCRIPT_URL, {
-              method: 'POST',
-              body: JSON.stringify({
-                action: 'submitForm',
-                token: token,
-                formData: formData
-              })
-            });
-            const submitResult = await submitResponse.json();
-            if (submitResult.error) {
-              setErrors({ global: 'Erro ao salvar os dados: ' + submitResult.error });
-              setIsGenerating(false);
-              return;
-            }
-          } catch (err) {
-            console.error("Erro ao enviar dados ao Apps Script:", err);
-            setErrors({ global: 'Erro de conexão com o servidor. Por favor, verifique sua rede ou tente novamente.' });
-            setIsGenerating(false);
-            return;
-          }
-        }
+        // ETAPA 1: Gerar o PDF e obter o base64 ANTES de enviar ao servidor
+        // (o bloco try/catch do jsPDF vem mais abaixo e envolve tudo)
 
         try {
           const { jsPDF } = window.jspdf;
@@ -841,19 +819,43 @@
           doc.setTextColor(33, 21, 81);
           doc.text("ASSINATURA DO FUNCIONÁRIO", marginX + printableWidth / 2, y + 4.5, { align: "center" });
 
-          // Save the PDF
+          // Salvar o PDF localmente (download)
           const cleanName = formData.nomeCompleto.trim().replace(/\s+/g, '_').slice(0, 30);
           const fileName = `Ficha_Cadastro_${cleanName}.pdf`;
           doc.save(fileName);
 
-          setSuccessMessage("Ficha cadastral gerada com sucesso! O download do PDF iniciará automaticamente.");
+          // ETAPA 2: Enviar dados + PDF base64 ao Google Sheets / Drive
+          if (token && APPS_SCRIPT_URL !== 'COLE_A_URL_DO_APPS_SCRIPT_AQUI') {
+            try {
+              const pdfBase64 = doc.output('datauristring');
+              const submitResponse = await fetch(APPS_SCRIPT_URL, {
+                method: 'POST',
+                body: JSON.stringify({
+                  action: 'submitForm',
+                  token: token,
+                  formData: formData,
+                  pdfBase64: pdfBase64
+                })
+              });
+              const submitResult = await submitResponse.json();
+              if (submitResult.error) {
+                // Não bloquear o candidato — dados foram salvos localmente
+                console.warn('Aviso ao salvar no servidor:', submitResult.error);
+              }
+            } catch (err) {
+              console.error('Erro ao enviar dados ao Apps Script:', err);
+              // Não impedir conclusão — PDF já foi gerado e baixado
+            }
+          }
+
+          setSuccessMessage('Ficha cadastral gerada com sucesso! O download do PDF iniciou automaticamente.');
           // Se tiver token, transiciona para a tela de sucesso
           if (token && APPS_SCRIPT_URL !== 'COLE_A_URL_DO_APPS_SCRIPT_AQUI') {
             setIsFormSubmitted(true);
           }
         } catch (err) {
-          console.error("Erro na geração do PDF:", err);
-          setErrors({ global: "Ocorreu um erro ao gerar o PDF. Veja os detalhes no console do navegador." });
+          console.error('Erro na geração do PDF:', err);
+          setErrors({ global: 'Ocorreu um erro ao gerar o PDF. Veja os detalhes no console do navegador.' });
         } finally {
           setIsGenerating(false);
         }

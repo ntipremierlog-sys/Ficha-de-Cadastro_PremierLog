@@ -477,8 +477,18 @@
     .action-btn-wa:hover { background: #c8e6c9; }
     .action-btn-eye { background: var(--success-bg); color: #065f46; }
     .action-btn-eye:hover { background: #d1fae5; }
+    .action-btn-pdf { background: #fff1f2; color: #9f1239; }
+    .action-btn-pdf:hover { background: #fecdd3; }
     .action-btn-del { background: var(--danger-bg); color: #991b1b; }
     .action-btn-del:hover { background: #fecaca; }
+    .btn-download-pdf {
+      padding: 10px 20px; border-radius: 8px;
+      background: #9f1239; color: white;
+      font-size: 13.5px; font-weight: 600;
+      display: inline-flex; align-items: center; gap: 7px;
+      transition: background .15s; text-decoration: none;
+    }
+    .btn-download-pdf:hover { background: #881337; }
 
     /* Estado vazio */
     .empty-state {
@@ -947,7 +957,7 @@
     <div class="modal-body" id="detailsModalBody">
       <p style="text-align:center;color:var(--text-3);padding:30px;">Carregando dados...</p>
     </div>
-    <div class="modal-footer">
+    <div class="modal-footer" id="detailsModalFooter">
       <button class="btn-cancel" onclick="closeModal('detailsModal')">Fechar</button>
     </div>
   </div>
@@ -1015,7 +1025,7 @@
 // ============================================================
 // ⚠️  CONFIGURE AQUI APÓS PUBLICAR O APPS SCRIPT
 // ============================================================
-const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbz4IphjjiZ-OOLLLgeLJi8sa07ATlWlNtdJU5hqBHKnvugRT7s_qruXL7T-TYeAL5Doow/exec';
+const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxZDdXHI7cPJ_j78ZV8dq-5ya8mI1tLZswO2cBsgb1Ukj8FtFPKZO-3GYohzuPZsY-Imw/exec';
 const ADMIN_SECRET    = 'Premier2025AdminSecret!'; // deve ser igual ao apps-script.js
 const ADMIN_PASSWORD  = 'Premier@2025';            // senha de login do painel
 const FORM_BASE_URL   = 'https://ntipremierlog-sys.github.io/Ficha-de-Cadastro_PremierLog/'; // URL do formulário
@@ -1329,6 +1339,12 @@ function actionBtns(c) {
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
       Ver
     </button>`;
+    if (c.pdfUrl) {
+      btns += `<a class="action-btn action-btn-pdf" href="${esc(c.pdfUrl)}" target="_blank" rel="noopener" title="Abrir PDF no Drive">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+        PDF
+      </a>`;
+    }
   }
   btns += `<button class="action-btn action-btn-del" onclick="confirmDelete('${c.token}','${esc(c.nome)}')" title="Excluir">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
@@ -1398,7 +1414,26 @@ async function viewDetails(token, nome) {
     }
     if (data.error) { document.getElementById('detailsModalBody').innerHTML = '<p style="color:var(--danger);padding:20px;">Erro: ' + esc(data.error) + '</p>'; return; }
     const r = data.response || {};
+    const pdfUrl = r.pdfUrl || '';
+
+    // Atualizar footer do modal com botão de PDF se disponível
+    const footer = document.getElementById('detailsModalFooter');
+    footer.innerHTML = '<button class="btn-cancel" onclick="closeModal(\'detailsModal\')">Fechar</button>';
+    if (pdfUrl) {
+      footer.innerHTML += `<a class="btn-download-pdf" href="${esc(pdfUrl)}" target="_blank" rel="noopener">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+        📎 Abrir PDF da Ficha
+      </a>`;
+    }
+
     document.getElementById('detailsModalBody').innerHTML = `
+      ${pdfUrl ? `<div style="background:linear-gradient(135deg,#fff1f2,#ffe4e6);border:1.5px solid #fecdd3;border-radius:10px;padding:12px 16px;margin-bottom:18px;display:flex;align-items:center;gap:12px;">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#9f1239" stroke-width="2" width="22" height="22"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+        <div style="flex:1;">
+          <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#9f1239;margin-bottom:2px;">PDF da Ficha Disponível</div>
+          <a href="${esc(pdfUrl)}" target="_blank" rel="noopener" style="font-size:12.5px;color:#be123c;text-decoration:underline;word-break:break-all;">Abrir no Google Drive ↗</a>
+        </div>
+      </div>` : ''}
       <div class="details-section">
         <div class="details-section-title">Identificação Pessoal</div>
         <div class="details-grid">
