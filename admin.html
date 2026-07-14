@@ -461,7 +461,7 @@
     }
     .badge-done::before { background: var(--success); }
     .td-date { font-size: 12.5px; color: var(--text-2); white-space: nowrap; }
-    .td-actions { white-space: nowrap; width: 170px; }
+    .td-actions { white-space: nowrap; width: 190px; }
     .action-btn {
       display: inline-flex; align-items: center; gap: 5px;
       padding: 6px 10px; border-radius: 6px;
@@ -664,7 +664,7 @@
     .action-select-wrapper {
       position: relative;
       display: inline-block;
-      width: 150px;
+      width: 170px;
     }
     .action-select {
       width: 100%;
@@ -702,6 +702,14 @@
     .action-select option.opt-delete {
       color: var(--danger);
       font-weight: 600;
+    }
+    .action-select.feedback-active {
+      border-color: var(--success);
+      color: #065f46;
+      background-color: var(--success-bg);
+      background-image: none !important;
+      padding-right: 12px;
+      text-align: center;
     }
 
     /* Ajustes responsive */
@@ -1366,10 +1374,11 @@ function renderCandidatesTable() {
 
 function actionBtns(c) {
   const isConcluido = c.status === 'Concluído';
+  const firstName = (c.nome || '').trim().split(' ')[0];
   return `
     <div class="action-select-wrapper">
       <select class="action-select" onchange="handleAction(this, '${c.token}', '${esc(c.nome)}', '${esc(c.pdfUrl)}')">
-        <option value="" disabled selected>Ações ▾</option>
+        <option value="" disabled selected>Ações - ${esc(firstName)} ▾</option>
         <option value="copyLink">🔗 Copiar Link</option>
         <option value="resendMail">📧 Reenviar E-mail</option>
         <option value="sendWhatsApp">💬 Enviar WhatsApp</option>
@@ -1385,32 +1394,54 @@ function handleAction(selectEl, token, nome, pdfUrl) {
   const action = selectEl.value;
   if (!action) return;
   
-  // Reseta o select para o estado padrão
+  const firstName = nome.trim().split(' ')[0];
+  const placeholderOpt = selectEl.options[0];
+  
+  // Reseta o select para o placeholder
   selectEl.value = "";
+  
+  // Executa a ação e define a mensagem de feedback temporária
+  let feedbackText = "";
   
   switch (action) {
     case 'copyLink':
       copyLink(token);
+      feedbackText = "🔗 Link Copiado!";
       break;
     case 'resendMail':
       resendMail(token, nome);
+      feedbackText = "📧 Enviado!";
       break;
     case 'sendWhatsApp':
       sendWhatsAppDirect(token, nome);
+      feedbackText = "💬 WhatsApp!";
       break;
     case 'viewDetails':
       viewDetails(token, nome);
+      feedbackText = "👁️ Ver Dados...";
       break;
     case 'viewPdf':
       if (pdfUrl) {
         window.open(pdfUrl, '_blank', 'noopener,noreferrer');
+        feedbackText = "📄 PDF Aberto!";
       } else {
         showToast('PDF não disponível para este candidato.', 'warning');
+        feedbackText = "⚠️ Sem PDF";
       }
       break;
     case 'delete':
       confirmDelete(token, nome);
+      feedbackText = "❌ Excluindo...";
       break;
+  }
+  
+  if (feedbackText) {
+    placeholderOpt.textContent = feedbackText;
+    selectEl.classList.add('feedback-active');
+    setTimeout(() => {
+      placeholderOpt.textContent = `Ações - ${firstName} ▾`;
+      selectEl.classList.remove('feedback-active');
+    }, 2000);
   }
 }
 
