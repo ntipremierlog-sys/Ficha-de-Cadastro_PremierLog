@@ -18,6 +18,26 @@ const SHEET_CANDIDATES = 'Candidatos';
 const SHEET_RESPONSES  = 'Respostas';
 
 // ============================================================
+// DIAGNÓSTICO: Execute esta função no editor para autorizar o Drive
+// Vá em: Executar → testarAcessoDrive
+// ============================================================
+function testarAcessoDrive() {
+  try {
+    var folder = DriveApp.getFolderById(CONFIG.DRIVE_FOLDER_ID);
+    Logger.log('✅ Pasta encontrada: ' + folder.getName());
+    // Cria e remove um arquivo de teste para confirmar permissão de escrita
+    var blob = Utilities.newBlob('teste', 'text/plain', '_teste_permissao.txt');
+    var file = folder.createFile(blob);
+    Logger.log('✅ Arquivo de teste criado: ' + file.getId());
+    file.setTrashed(true);
+    Logger.log('✅ DriveApp autorizado com sucesso! PDFs serão salvos normalmente.');
+    return 'Sucesso — Drive autorizado!';
+  } catch(e) {
+    Logger.log('❌ Erro: ' + e.message);
+    return 'Erro: ' + e.message;
+  }
+}
+
 // ROTEADOR GET
 // ============================================================
 function doGet(e) {
@@ -32,6 +52,7 @@ function doGet(e) {
       case 'addCandidate':    return jsonResponse(addCandidate(e.parameter));
       case 'resendEmail':     return jsonResponse(resendEmail(e.parameter.token, e.parameter.secret));
       case 'deleteCandidate': return jsonResponse(deleteCandidate(e.parameter.token, e.parameter.secret));
+      case 'getDebugInfo':     return jsonResponse(getDebugInfo(e.parameter.secret));
       default:                return jsonResponse({ error: 'Ação inválida: ' + action });
     }
   } catch (err) {
@@ -41,14 +62,65 @@ function doGet(e) {
 }
 
 // ============================================================
+// FUNÇÃO: Obter Informações de Diagnóstico
+// ============================================================
+function getDebugInfo(secret) {
+  if (secret !== CONFIG.ADMIN_SECRET) return { error: 'Não autorizado' };
+  ensureSheets();
+  var ss = SpreadsheetApp.openById(CONFIG.SPREADSHEET_ID);
+  var cs = ss.getSheetByName(SHEET_CANDIDATES);
+  var rs = ss.getSheetByName(SHEET_RESPONSES);
+  
+  var csRows = cs.getDataRange().getValues();
+  var rsRows = rs.getDataRange().getValues();
+  
+  var folderStatus = '';
+  try {
+    var folder = DriveApp.getFolderById(CONFIG.DRIVE_FOLDER_ID);
+    folderStatus = 'OK - Nome: ' + folder.getName();
+  } catch(e) {
+    folderStatus = 'ERRO: ' + e.message;
+  }
+  
+  return {
+    folderStatus: folderStatus,
+    candidatesHeaders: csRows[0],
+    lastCandidates: csRows.slice(-3).map(function(row) {
+      return {
+        id: row[0],
+        nome: row[1],
+        status: row[5],
+        dateEnvio: row[6],
+        datePreenchimento: row[7],
+        pdfUrl: row[8]
+      };
+    }),
+    responsesHeaders: rsRows[0],
+    lastResponses: rsRows.slice(-3).map(function(row) {
+      return {
+        token: row[0],
+        datePreenchimento: row[1],
+        nome: row[2],
+        pdfUrl: row[row.length - 1]
+      };
+    })
+  };
+}
+
+// ============================================================
 // ROTEADOR POST (form submission)
 // ============================================================
 function doPost(e) {
   try {
+    var bodySize = e.postData ? e.postData.contents.length : 0;
+    Logger.log('POST recebido — tamanho do body: ' + bodySize + ' chars');
     const data = JSON.parse(e.postData.contents);
+    Logger.log('action: ' + data.action);
+    Logger.log('pdfBase64 presente: ' + (data.pdfBase64 ? 'SIM (' + data.pdfBase64.length + ' chars)' : 'NÃO'));
     if (data.action === 'submitForm') return jsonResponse(submitForm(data));
     return jsonResponse({ error: 'Ação POST inválida' });
   } catch (err) {
+    Logger.log('doPost ERRO: ' + err.message);
     console.error('doPost error:', err);
     return jsonResponse({ error: err.message });
   }
@@ -260,8 +332,8 @@ function submitForm(data) {
   var pdfError = '';
   if (data.pdfBase64 && candidateName) {
     try {
-      // Remove prefixo "data:application/pdf;base64,"
-      var base64Data = data.pdfBase64.replace(/^data:[^;]+;base64,/, '');
+      // Remove o prefixo data URI (ex: "data:application/pdf;filename=generated.pdf;base64,") de forma robusta
+      var base64Data = data.pdfBase64.split(';base64,')[1] || data.pdfBase64;
       var pdfBytes   = Utilities.base64Decode(base64Data);
       var pdfBlob    = Utilities.newBlob(pdfBytes, 'application/pdf',
         'Ficha_Cadastro_' + candidateName.replace(/\s+/g, '_').substring(0, 30) + '.pdf');
