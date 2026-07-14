@@ -461,7 +461,7 @@
     }
     .badge-done::before { background: var(--success); }
     .td-date { font-size: 12.5px; color: var(--text-2); white-space: nowrap; }
-    .td-actions { white-space: nowrap; min-width: 290px; }
+    .td-actions { white-space: nowrap; width: 170px; }
     .action-btn {
       display: inline-flex; align-items: center; gap: 5px;
       padding: 6px 10px; border-radius: 6px;
@@ -659,6 +659,50 @@
     #toast.error   { background: var(--danger); }
     #toast.info    { background: var(--navy); }
     #toast.warning { background: var(--warning); color: #1c1917; }
+
+    /* Caixa de Seleção de Ações (Action Dropdown) */
+    .action-select-wrapper {
+      position: relative;
+      display: inline-block;
+      width: 150px;
+    }
+    .action-select {
+      width: 100%;
+      padding: 6px 28px 6px 12px;
+      font-size: 12.5px;
+      font-weight: 600;
+      color: var(--navy);
+      background-color: var(--bg);
+      border: 1.5px solid var(--border);
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      -webkit-appearance: none;
+      appearance: none;
+      background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='none' stroke='%23211551' stroke-width='2' viewBox='0 0 24 24'><polyline points='6 9 12 15 18 9'/></svg>");
+      background-repeat: no-repeat;
+      background-position: right 10px center;
+      background-size: 10px;
+    }
+    .action-select:hover {
+      border-color: var(--navy-light);
+      background-color: white;
+      box-shadow: 0 2px 8px rgba(33, 21, 81, 0.05);
+    }
+    .action-select:focus {
+      border-color: var(--navy);
+      background-color: white;
+      box-shadow: 0 0 0 3px rgba(33, 21, 81, 0.08);
+    }
+    .action-select option {
+      font-weight: 500;
+      color: var(--text);
+      background-color: white;
+    }
+    .action-select option.opt-delete {
+      color: var(--danger);
+      font-weight: 600;
+    }
 
     /* Ajustes responsive */
     @media (max-width: 1024px) {
@@ -1321,36 +1365,53 @@ function renderCandidatesTable() {
 }
 
 function actionBtns(c) {
-  let btns = `
-    <button class="action-btn action-btn-link" onclick="copyLink('${c.token}')" title="Copiar link">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
-      Link
-    </button>
-    <button class="action-btn action-btn-mail" onclick="resendMail('${c.token}','${esc(c.nome)}')" title="Reenviar e-mail">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
-      E-mail
-    </button>
-    <button class="action-btn action-btn-wa" onclick="sendWhatsAppDirect('${c.token}','${esc(c.nome)}')" title="Enviar via WhatsApp">
-      <svg viewBox="0 0 24 24" fill="currentColor" width="13" height="13" style="display:inline-block; vertical-align:middle; margin-right:3px;"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 0 1-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 0 1-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 0 1 2.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0 0 12.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 0 0 5.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 0 0-3.48-8.413Z"/></svg>
-      WhatsApp
-    </button>`;
-  if (c.status === 'Concluído') {
-    btns += `<button class="action-btn action-btn-eye" onclick="viewDetails('${c.token}','${esc(c.nome)}')" title="Ver dados">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
-      Ver
-    </button>`;
-    if (c.pdfUrl) {
-      btns += `<a class="action-btn action-btn-pdf" href="${esc(c.pdfUrl)}" target="_blank" rel="noopener" title="Abrir PDF no Drive">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
-        PDF
-      </a>`;
-    }
+  const isConcluido = c.status === 'Concluído';
+  return `
+    <div class="action-select-wrapper">
+      <select class="action-select" onchange="handleAction(this, '${c.token}', '${esc(c.nome)}', '${esc(c.pdfUrl)}')">
+        <option value="" disabled selected>Ações ▾</option>
+        <option value="copyLink">🔗 Copiar Link</option>
+        <option value="resendMail">📧 Reenviar E-mail</option>
+        <option value="sendWhatsApp">💬 Enviar WhatsApp</option>
+        ${isConcluido ? `<option value="viewDetails">👁️ Ver Dados</option>` : ''}
+        ${isConcluido && c.pdfUrl ? `<option value="viewPdf">📄 Abrir PDF (Drive)</option>` : ''}
+        <option value="delete" class="opt-delete">❌ Excluir Candidato</option>
+      </select>
+    </div>
+  `;
+}
+
+function handleAction(selectEl, token, nome, pdfUrl) {
+  const action = selectEl.value;
+  if (!action) return;
+  
+  // Reseta o select para o estado padrão
+  selectEl.value = "";
+  
+  switch (action) {
+    case 'copyLink':
+      copyLink(token);
+      break;
+    case 'resendMail':
+      resendMail(token, nome);
+      break;
+    case 'sendWhatsApp':
+      sendWhatsAppDirect(token, nome);
+      break;
+    case 'viewDetails':
+      viewDetails(token, nome);
+      break;
+    case 'viewPdf':
+      if (pdfUrl) {
+        window.open(pdfUrl, '_blank', 'noopener,noreferrer');
+      } else {
+        showToast('PDF não disponível para este candidato.', 'warning');
+      }
+      break;
+    case 'delete':
+      confirmDelete(token, nome);
+      break;
   }
-  btns += `<button class="action-btn action-btn-del" onclick="confirmDelete('${c.token}','${esc(c.nome)}')" title="Excluir">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
-    Excluir
-  </button>`;
-  return btns;
 }
 
 function esc(s) { return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
