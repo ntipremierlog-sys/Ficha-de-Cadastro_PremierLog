@@ -1276,12 +1276,12 @@ function formatDisplayDate(dateStr) {
     const d = new Date(dateStr);
     if (!isNaN(d.getTime())) {
       const pad = (n) => String(n).padStart(2, '0');
-      // Usar métodos UTC para evitar que o navegador aplique o offset de fuso horário local
-      const day = pad(d.getUTCDate());
-      const month = pad(d.getUTCMonth() + 1);
-      const year = d.getUTCFullYear();
-      const hours = pad(d.getUTCHours());
-      const minutes = pad(d.getUTCMinutes());
+      // Usar métodos locais para exibir no fuso horário do usuário
+      const day = pad(d.getDate());
+      const month = pad(d.getMonth() + 1);
+      const year = d.getFullYear();
+      const hours = pad(d.getHours());
+      const minutes = pad(d.getMinutes());
       return `${day}/${month}/${year} às ${hours}:${minutes}`;
     }
   } catch (err) {
@@ -1673,15 +1673,8 @@ function parseDateString(str) {
   // 2. Se for formato ISO string (yyyy-MM-ddTHH:mm:ss...)
   const d = new Date(str);
   if (!isNaN(d.getTime())) {
-    // Retorna um objeto Date local mapeando os mesmos valores de calendário UTC
-    return new Date(
-      d.getUTCFullYear(),
-      d.getUTCMonth(),
-      d.getUTCDate(),
-      d.getUTCHours(),
-      d.getUTCMinutes(),
-      d.getUTCSeconds()
-    );
+    // Retorna o objeto Date diretamente para comparação correta
+    return d;
   }
   
   return null;
