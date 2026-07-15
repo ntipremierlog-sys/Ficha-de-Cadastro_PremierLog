@@ -1528,6 +1528,40 @@
                   />
                 </div>
 
+                {formData.optanteVT && (
+                  <div className={`p-4 rounded-2xl border transition-all duration-300 animate-fade-in flex items-start gap-3 text-xs leading-relaxed ${
+                    formData.optanteVT === 'Sim'
+                      ? "bg-blue-50 border-blue-200 text-blue-800"
+                      : "bg-amber-50 border-amber-200 text-amber-800"
+                  }`}>
+                    <div className="shrink-0 mt-0.5">
+                      {formData.optanteVT === 'Sim' ? (
+                        <svg className="w-5 h-5 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                      ) : (
+                        <svg className="w-5 h-5 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                        </svg>
+                      )}
+                    </div>
+                    <div>
+                      <span className="font-bold block mb-1">
+                        {formData.optanteVT === 'Sim' ? 'Opção selecionada: Desejo receber o VT' : 'Opção selecionada: Não desejo receber o VT'}
+                      </span>
+                      {formData.optanteVT === 'Sim' ? (
+                        <p>
+                          Ao optar por receber o Vale Transporte, a empresa fornecerá o benefício para o seu deslocamento diário residência-trabalho-residência. Haverá o desconto regulamentar em folha de pagamento de até <strong>6% do seu salário base</strong>. <strong>Esta opção constará no seu contrato de trabalho.</strong>
+                        </p>
+                      ) : (
+                        <p>
+                          Ao optar por não receber o Vale Transporte, você declara que utiliza meios próprios de locomoção ou que não necessita do benefício para o trajeto residência-trabalho-residência. <strong>Não haverá nenhum desconto de 6%</strong> em sua folha de pagamento. <strong>Esta declaração constará no seu contrato de trabalho.</strong>
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                )}
+
                 <div className="bg-slate-50 border border-slate-100 rounded-2xl p-4 text-xs text-slate-500 leading-relaxed italic">
                   <span className="font-bold text-premier-blue not-italic block mb-0.5">Informação Legal:</span>
                   Conforme art. 9º do Decreto nº 95.247/1987, o desconto referente ao VT é de até 6% do salário base do colaborador, descontado em folha mensalmente.
