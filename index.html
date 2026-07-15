@@ -203,6 +203,7 @@
       const [isValidatingToken, setIsValidatingToken] = useState(true);
       const [tokenError, setTokenError] = useState(null);
       const [isFormSubmitted, setIsFormSubmitted] = useState(false);
+      const [vtModal, setVtModal] = useState({ isOpen: false, option: '' });
 
       useEffect(() => {
         const urlParams = new URLSearchParams(window.location.search);
@@ -1524,7 +1525,10 @@
                       { label: 'Não desejo receber o VT', value: 'Não' }
                     ]}
                     selected={formData.optanteVT}
-                    onChange={(val) => handleInputChange('optanteVT', val)}
+                    onChange={(val) => {
+                      handleInputChange('optanteVT', val);
+                      setVtModal({ isOpen: true, option: val });
+                    }}
                   />
                 </div>
 
@@ -1916,6 +1920,75 @@
             </div>
 
           </form>
+
+          {/* VT Confirmation Modal */}
+          {vtModal.isOpen && (
+            <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-[9999] flex items-center justify-center p-4 animate-fade-in">
+              <div className="bg-white rounded-3xl shadow-2xl border border-slate-100 max-w-lg w-full overflow-hidden transform transition-all duration-300 scale-100 p-6 md:p-8 space-y-6">
+                <div className="flex items-center gap-3 border-b border-slate-100 pb-4">
+                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${
+                    vtModal.option === 'Sim' ? 'bg-blue-50 text-blue-600' : 'bg-amber-50 text-amber-600'
+                  }`}>
+                    {vtModal.option === 'Sim' ? (
+                      <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                    ) : (
+                      <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                      </svg>
+                    )}
+                  </div>
+                  <div>
+                    <h3 className="text-base font-extrabold text-premier-blue uppercase tracking-wider font-sans">
+                      Confirmação de Opção de VT
+                    </h3>
+                    <p className="text-slate-400 text-xs mt-0.5">Por favor, leia atentamente as informações abaixo</p>
+                  </div>
+                </div>
+
+                <div className="space-y-4 text-slate-600 text-sm leading-relaxed">
+                  {vtModal.option === 'Sim' ? (
+                    <>
+                      <p className="font-semibold text-slate-800">Você optou por RECEBER o Vale Transporte.</p>
+                      <p>
+                        A empresa fornecerá o benefício correspondente ao seu deslocamento diário residência-trabalho-residência.
+                      </p>
+                      <p>
+                        Conforme a legislação vigente, haverá o desconto regulamentar em sua folha de pagamento de até <strong>6% do seu salário base mensal</strong>.
+                      </p>
+                      <div className="bg-blue-50/50 border border-blue-100 rounded-2xl p-4 text-xs text-blue-800 font-medium">
+                        ⚠️ <strong>Importante:</strong> Esta decisão de adesão ao Vale Transporte constará no seu <strong>contrato de trabalho</strong>.
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <p className="font-semibold text-slate-800">Você optou por NÃO RECEBER o Vale Transporte.</p>
+                      <p>
+                        Ao declinar o benefício, você declara sob as penas da lei que utiliza meios próprios de locomoção ou que não necessita de transporte público para o trajeto residência-trabalho-residência.
+                      </p>
+                      <p>
+                        Portanto, <strong>não haverá nenhum desconto de 6%</strong> em sua folha de pagamento referente a este benefício.
+                      </p>
+                      <div className="bg-amber-50/50 border border-amber-100 rounded-2xl p-4 text-xs text-amber-800 font-medium">
+                        ⚠️ <strong>Importante:</strong> Esta declaração de abdicação do Vale Transporte constará no seu <strong>contrato de trabalho</strong>.
+                      </div>
+                    </>
+                  )}
+                </div>
+
+                <div className="flex justify-end pt-4 border-t border-slate-100">
+                  <button
+                    type="button"
+                    onClick={() => setVtModal({ isOpen: false, option: '' })}
+                    className="px-6 py-3 bg-premier-blue text-white text-sm font-bold rounded-xl shadow-md hover:bg-premier-blue-dark transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-premier-blue focus:ring-offset-1"
+                  >
+                    Estou de acordo e confirmo
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
 
         </div>
       );
