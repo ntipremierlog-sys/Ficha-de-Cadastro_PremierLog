@@ -198,6 +198,8 @@
       const [token, setToken] = useState(null);
       const [vaga, setVaga] = useState('');
       const hasHealthPlan = !token || vaga.includes('1268') || vaga.includes('158');
+      // Contrato 618 - Indaiatuba não oferece Vale Transporte
+      const hasVT = !vaga.includes('618');
       const [isValidatingToken, setIsValidatingToken] = useState(true);
       const [tokenError, setTokenError] = useState(null);
       const [isFormSubmitted, setIsFormSubmitted] = useState(false);
@@ -614,16 +616,18 @@
           y += 13.0;
 
           // 6. BENEFÍCIOS - VALE TRANSPORTE
-          drawSectionHeader("Benefícios - Vale Transporte");
+          if (hasVT) {
+            drawSectionHeader("Benefícios - Vale Transporte");
 
-          drawField("OPTANTE PELO VALE TRANSPORTE?", formData.optanteVT, marginX, printableWidth);
-          y += 10.0;
+            drawField("OPTANTE PELO VALE TRANSPORTE?", formData.optanteVT, marginX, printableWidth);
+            y += 10.0;
 
-          doc.setFont("helvetica", "italic");
-          doc.setFontSize(6.8);
-          doc.setTextColor(110, 120, 130);
-          doc.text("Conforme art. 9º do Decreto nº 95.247/1987, o desconto referente ao VT é de até 6% do salário base do colaborador, descontado em folha mensalmente.", marginX, y);
-          y += 12.0;
+            doc.setFont("helvetica", "italic");
+            doc.setFontSize(6.8);
+            doc.setTextColor(110, 120, 130);
+            doc.text("Conforme art. 9º do Decreto nº 95.247/1987, o desconto referente ao VT é de até 6% do salário base do colaborador, descontado em folha mensalmente.", marginX, y);
+            y += 12.0;
+          }
 
           if (hasHealthPlan) {
             // 7. PLANO DE SAÚDE - SULAMÉRICA
@@ -826,25 +830,52 @@
 
           // ETAPA 2: Enviar dados + PDF base64 ao Google Sheets / Drive
           if (token && APPS_SCRIPT_URL !== 'COLE_A_URL_DO_APPS_SCRIPT_AQUI') {
-            try {
-              const pdfBase64 = doc.output('datauristring');
-              const submitResponse = await fetch(APPS_SCRIPT_URL, {
-                method: 'POST',
-                body: JSON.stringify({
-                  action: 'submitForm',
-                  token: token,
-                  formData: formData,
-                  pdfBase64: pdfBase64
-                })
-              });
-              const submitResult = await submitResponse.json();
-              if (submitResult.error) {
-                // Não bloquear o candidato — dados foram salvos localmente
-                console.warn('Aviso ao salvar no servidor:', submitResult.error);
+            // Retry automático: até 3 tentativas com delay crescente
+            const MAX_RETRIES = 3;
+            let serverSuccess = false;
+            let lastServerError = null;
+
+            for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+              try {
+                const pdfBase64 = doc.output('datauristring');
+                const submitResponse = await fetch(APPS_SCRIPT_URL, {
+                  method: 'POST',
+                  body: JSON.stringify({
+                    action: 'submitForm',
+                    token: token,
+                    formData: formData,
+                    pdfBase64: pdfBase64
+                  })
+                });
+                const submitResult = await submitResponse.json();
+                if (submitResult.success) {
+                  serverSuccess = true;
+                  break; // sucesso — sai do loop
+                } else if (submitResult.error) {
+                  lastServerError = submitResult.error;
+                  console.warn(`Tentativa ${attempt} — erro do servidor:`, lastServerError);
+                  // Erro de lógica (ex: token inválido) — não adianta fazer retry
+                  break;
+                }
+              } catch (err) {
+                lastServerError = err.message || 'Erro de rede';
+                console.error(`Tentativa ${attempt} falhou:`, err);
+                if (attempt < MAX_RETRIES) {
+                  // Aguarda antes de tentar novamente: 2s, depois 4s
+                  await new Promise(resolve => setTimeout(resolve, attempt * 2000));
+                }
               }
-            } catch (err) {
-              console.error('Erro ao enviar dados ao Apps Script:', err);
-              // Não impedir conclusão — PDF já foi gerado e baixado
+            }
+
+            if (!serverSuccess) {
+              // Notifica o candidato sobre a falha sem impedir o download local
+              const errMsg = lastServerError || 'Erro de conexão';
+              console.error('Falha definitiva ao registrar no servidor:', errMsg);
+              setErrors({
+                global: `⚠️ O PDF foi gerado e baixado com sucesso, mas houve um problema ao registrar sua ficha no sistema (${errMsg}). Por favor, envie o arquivo PDF para o RH diretamente ou tente novamente clicando no botão de envio.`
+              });
+              setIsGenerating(false);
+              return; // Não avança para tela de sucesso — status ainda Pendente
             }
           }
 
@@ -1477,6 +1508,7 @@
             </div>
 
             {/* SECTION 5: BENEFÍCIOS - VALE TRANSPORTE */}
+            {hasVT ? (
             <div className="space-y-6">
               <div className="flex items-center gap-3 border-b border-slate-100 pb-3">
                 <div className="w-8 h-8 rounded-lg bg-premier-blue/10 flex items-center justify-center text-premier-blue font-bold text-sm">05</div>
@@ -1502,12 +1534,13 @@
                 </div>
               </div>
             </div>
+            ) : null}
 
             {/* SECTION 6: PLANO DE SAÚDE - SULAMÉRICA */}
             {hasHealthPlan && (
               <div className="space-y-6">
                 <div className="flex items-center gap-3 border-b border-slate-100 pb-3">
-                <div className="w-8 h-8 rounded-lg bg-premier-blue/10 flex items-center justify-center text-premier-blue font-bold text-sm">06</div>
+                <div className="w-8 h-8 rounded-lg bg-premier-blue/10 flex items-center justify-center text-premier-blue font-bold text-sm">{hasVT ? '06' : '05'}</div>
                 <h2 className="text-lg font-bold text-premier-blue">Plano de Saúde</h2>
                 <img
                   id="sulamericaLogoImg"
@@ -1678,7 +1711,7 @@
             {/* SECTION 7: DECLARAÇÃO FINAL */}
             <div className="space-y-6">
               <div className="flex items-center gap-3 border-b border-slate-100 pb-3">
-                <div className="w-8 h-8 rounded-lg bg-premier-blue/10 flex items-center justify-center text-premier-blue font-bold text-sm">{hasHealthPlan ? "07" : "06"}</div>
+                <div className="w-8 h-8 rounded-lg bg-premier-blue/10 flex items-center justify-center text-premier-blue font-bold text-sm">{hasHealthPlan && hasVT ? '07' : (!hasHealthPlan && !hasVT) ? '05' : '06'}</div>
                 <h2 className="text-lg font-bold text-premier-blue">Declaração Final</h2>
               </div>
 
