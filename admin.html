@@ -1058,6 +1058,27 @@
           <input class="form-input" id="exportEndDate" type="date" style="padding: 10px; border-radius: 8px; border: 1.5px solid var(--border); font-size: 13.5px; width: 100%; font-family: inherit; color: var(--text); background: white;" />
         </div>
       </div>
+      <div class="form-group" style="margin-top: 15px;">
+        <label class="form-label" for="exportContrato">Filtrar por Contrato</label>
+        <select class="form-input" id="exportContrato" style="padding: 10px; border-radius: 8px; border: 1.5px solid var(--border); font-size: 13.5px; width: 100%; font-family: inherit; color: var(--text); background: white;">
+          <option value="todos">Todos os contratos</option>
+        </select>
+      </div>
+      <div class="form-group" style="margin-top: 15px;">
+        <label class="form-label" for="exportStatus">Filtrar por Status</label>
+        <select class="form-input" id="exportStatus" style="padding: 10px; border-radius: 8px; border: 1.5px solid var(--border); font-size: 13.5px; width: 100%; font-family: inherit; color: var(--text); background: white;">
+          <option value="todos">Todos os status</option>
+          <option value="Concluído">Concluído</option>
+          <option value="Pendente">Pendente</option>
+        </select>
+      </div>
+      <div class="form-group" style="margin-top: 15px;">
+        <label class="form-label" for="exportModel">Modelo de Planilha</label>
+        <select class="form-input" id="exportModel" style="padding: 10px; border-radius: 8px; border: 1.5px solid var(--border); font-size: 13.5px; width: 100%; font-family: inherit; color: var(--text); background: white;">
+          <option value="geral">Geral (Completa)</option>
+          <option value="beneficios">Benefícios (Nome, CPF, Contrato, VT)</option>
+        </select>
+      </div>
     </div>
     <div class="modal-footer">
       <button class="btn-cancel" onclick="closeModal('exportModal')">Cancelar</button>
@@ -1731,6 +1752,28 @@ function openExportModal() {
   document.getElementById('exportStartDate').value = '';
   document.getElementById('exportEndDate').value = '';
   toggleExportDateFields();
+  
+  // Populate contracts in export modal
+  const selExportContrato = document.getElementById('exportContrato');
+  if (selExportContrato) {
+    const contratos = new Set();
+    state.candidates.forEach(c => {
+      const { contrato } = extractVagaParts(c.vaga);
+      if (contrato) contratos.add(contrato);
+    });
+    const sortedContratos = [...contratos].sort();
+    
+    selExportContrato.innerHTML = '<option value="todos">Todos os contratos</option>';
+    sortedContratos.forEach(c => {
+      const o = document.createElement('option');
+      o.value = c;
+      o.textContent = c;
+      selExportContrato.appendChild(o);
+    });
+  }
+  
+  document.getElementById('exportStatus').value = 'todos';
+  document.getElementById('exportModel').value = 'geral';
   openModal('exportModal');
 }
 
@@ -1778,114 +1821,221 @@ async function doExportExcel() {
     const filterType = document.getElementById('exportFilterType').value;
     const startVal = document.getElementById('exportStartDate').value;
     const endVal = document.getElementById('exportEndDate').value;
+    const selectedContrato = document.getElementById('exportContrato').value;
+    const selectedStatus = document.getElementById('exportStatus').value;
+    const exportModel = document.getElementById('exportModel').value;
     
     let filteredCandidates = [...state.candidates];
-    let isFiltered = (filterType !== 'todos');
     
-    if (isFiltered) {
-      if (!startVal && !endVal) {
-        showToast('Selecione pelo menos uma data inicial ou final.', 'warning');
-        return;
-      }
-      
-      const startDate = startVal ? new Date(startVal + 'T00:00:00') : null;
-      const endDate = endVal ? new Date(endVal + 'T23:59:59') : null;
-      
-      filteredCandidates = state.candidates.filter(c => {
-        let dateToCompare = null;
-        if (filterType === 'envio') {
-          dateToCompare = parseDateString(c.dataEnvio);
-        } else if (filterType === 'preenchimento') {
-          dateToCompare = parseDateString(c.dataPreenchimento);
-        }
+    // 1. Filtro de Data
+    if (filterType !== 'todos') {
+      if (startVal || endVal) {
+        const startDate = startVal ? new Date(startVal + 'T00:00:00') : null;
+        const endDate = endVal ? new Date(endVal + 'T23:59:59') : null;
         
-        if (!dateToCompare) return false;
-        if (startDate && dateToCompare < startDate) return false;
-        if (endDate && dateToCompare > endDate) return false;
-        return true;
+        filteredCandidates = filteredCandidates.filter(c => {
+          let dateToCompare = null;
+          if (filterType === 'envio') {
+            dateToCompare = parseDateString(c.dataEnvio);
+          } else if (filterType === 'preenchimento') {
+            dateToCompare = parseDateString(c.dataPreenchimento);
+          }
+          
+          if (!dateToCompare) return false;
+          if (startDate && dateToCompare < startDate) return false;
+          if (endDate && dateToCompare > endDate) return false;
+          return true;
+        });
+      }
+    }
+    
+    // 2. Filtro de Contrato
+    if (selectedContrato !== 'todos') {
+      filteredCandidates = filteredCandidates.filter(c => {
+        const { contrato } = extractVagaParts(c.vaga);
+        return contrato === selectedContrato;
       });
     }
     
+    // 3. Filtro de Status
+    if (selectedStatus !== 'todos') {
+      filteredCandidates = filteredCandidates.filter(c => c.status === selectedStatus);
+    }
+    
+    let isFiltered = (filterType !== 'todos' || selectedContrato !== 'todos' || selectedStatus !== 'todos');
+    
     const wb = XLSX.utils.book_new();
+    const date = new Date().toLocaleDateString('pt-BR').replace(/\//g,'-');
+    const filenameType = isFiltered ? 'Filtrado' : 'Todos';
 
-    // Aba 1: Controle de Candidatos
-    const ctrlData = [
-      ['ID','Nome','E-mail','Vaga','Token','Status','Data de Envio','Data de Preenchimento'],
-      ...filteredCandidates.map(c => [c.id, c.nome, c.email, formatVagaDisplay(c.vaga), c.token, c.status, c.dataEnvio, c.dataPreenchimento])
-    ];
-    const ws1 = XLSX.utils.aoa_to_sheet(ctrlData);
-    ws1['!cols'] = [10,30,35,25,26,12,18,18].map(w => ({ wch: w }));
-    XLSX.utils.book_append_sheet(wb, ws1, 'Controle de Candidatos');
-
-    // Aba 2: Dados dos Formulários (busca do servidor)
-    try {
+    if (exportModel === 'beneficios') {
+      // Aba única: Benefícios
+      // Obter respostas do formulário
       let resp;
       if (APPS_SCRIPT_URL.includes('COLE')) {
         resp = {
           success: true,
           responses: state.candidates.filter(c => c.status === 'Concluído').map(c => ({
             Token: c.token,
-            DataPreenchimento: c.dataPreenchimento,
-            NomeCandidato: c.nome,
             NomeCompleto: c.nome,
-            NomeSocial: "",
             CPF: "123.456.789-00",
-            RG: "12.345.678-9",
-            'Endereço': "Rua das Flores, 100",
-            BairroCidade: "Brotas / Salvador - BA",
-            CEP: "40285-000",
-            WhatsApp: "(71) 99999-8888",
-            Email: c.email,
-            EmergenciaNome: "Maria Souza",
-            EmergenciaTel: "(71) 98888-7777",
-            TítuloEleitor: "123456789012",
-            GrauInstrução: "Superior Completo",
-            PossuiFilhos: "Não",
-            QtdFilhos: "0",
-            DeclararIR: "Não",
-            QtdDepIR: "0",
-            DependentesIR: "",
-            EstadoCivil: "Solteiro(a)",
-            EstadoCivilOutro: "",
-            'NúmeroBota': "40",
-            TamanhoCamisa: "M",
-            'TamanhoCalça': "M",
-            OptanteVT: "Não",
-            'PlanoSaúde': "Opto pelo plano de saúde com inclusão de dependente(s), e autorizo o empregador a descontar mensalmente em folha de pagamento os valores correspondentes de mensalidade e coparticipação.",
-            Dep1Nome: "",
-            Dep1CPF: "",
-            Dep2Nome: "",
-            Dep2CPF: "",
-            TipoAssinatura: "texto"
+            OptanteVT: "Não"
           }))
         };
       } else {
         resp = await apiGet({ action: 'getResponses' });
       }
-      
+
       if (resp.success && resp.responses.length > 0) {
         let finalResponses = resp.responses;
+        
+        // Sempre filtrar as respostas de acordo com os filtros gerais aplicados (isFiltered)
         if (isFiltered) {
           const allowedTokens = new Set(filteredCandidates.map(c => c.token));
           finalResponses = resp.responses.filter(r => allowedTokens.has(r.Token || r.token));
         }
-        
-        if (finalResponses.length > 0) {
-          const headers = Object.keys(finalResponses[0]);
-          const rows    = finalResponses.map(r => headers.map(h => r[h] || ''));
-          const ws2     = XLSX.utils.aoa_to_sheet([headers, ...rows]);
-          ws2['!cols']  = headers.map(() => ({ wch: 20 }));
-          XLSX.utils.book_append_sheet(wb, ws2, 'Respostas do Formulário');
-        }
-      }
-    } catch(e) { 
-      console.error("Erro ao processar respostas para Excel:", e); 
-    }
 
-    const date = new Date().toLocaleDateString('pt-BR').replace(/\//g,'-');
-    const filenameType = isFiltered ? 'Filtrado' : 'Todos';
-    XLSX.writeFile(wb, `Premier_RH_Candidatos_${filenameType}_${date}.xlsx`);
-    showToast('✅ Planilha exportada com sucesso!', 'success');
+        if (finalResponses.length === 0) {
+          showToast('Nenhum dado de benefícios encontrado para os filtros selecionados.', 'warning');
+          return;
+        }
+
+        // Mapear para o formato simplificado: Nome, CPF, Contrato, Opção de VT
+        const beneficiosData = [
+          ['Nome', 'CPF', 'Contrato', 'Opção de VT'],
+          ...finalResponses.map(r => {
+            const tokenVal = r.Token || r.token || '';
+            const cand = state.candidates.find(c => c.token === tokenVal);
+            const vaga = cand ? cand.vaga : '';
+            const { contrato } = extractVagaParts(vaga);
+            
+            return [
+              r.NomeCompleto || r.NomeCandidato || cand?.nome || '',
+              r.CPF || r.cpf || '',
+              contrato || '',
+              r.OptanteVT || r.optanteVT || ''
+            ];
+          })
+        ];
+
+        const ws = XLSX.utils.aoa_to_sheet(beneficiosData);
+        ws['!cols'] = [35, 18, 25, 20].map(w => ({ wch: w }));
+        XLSX.utils.book_append_sheet(wb, ws, 'Benefícios');
+
+        XLSX.writeFile(wb, `Premier_RH_Beneficios_${filenameType}_${date}.xlsx`);
+        showToast('✅ Planilha de Benefícios exportada com sucesso!', 'success');
+      } else {
+        showToast('Nenhum dado de benefícios disponível.', 'warning');
+      }
+    } else {
+      // Modelo Geral (Aba 1 e Aba 2)
+      // Aba 1: Controle de Candidatos
+      const ctrlData = [
+        ['ID','Nome','E-mail','Função','Contrato','Token','Status','Data de Envio','Data de Preenchimento'],
+        ...filteredCandidates.map(c => {
+          const { funcao, contrato } = extractVagaParts(c.vaga);
+          return [c.id, c.nome, c.email, funcao, contrato, c.token, c.status, c.dataEnvio, c.dataPreenchimento];
+        })
+      ];
+      const ws1 = XLSX.utils.aoa_to_sheet(ctrlData);
+      ws1['!cols'] = [10,30,35,25,25,26,12,18,18].map(w => ({ wch: w }));
+      XLSX.utils.book_append_sheet(wb, ws1, 'Controle de Candidatos');
+
+      // Aba 2: Dados dos Formulários (busca do servidor)
+      try {
+        let resp;
+        if (APPS_SCRIPT_URL.includes('COLE')) {
+          resp = {
+            success: true,
+            responses: state.candidates.filter(c => c.status === 'Concluído').map(c => ({
+              Token: c.token,
+              DataPreenchimento: c.dataPreenchimento,
+              NomeCandidato: c.nome,
+              NomeCompleto: c.nome,
+              NomeSocial: "",
+              CPF: "123.456.789-00",
+              RG: "12.345.678-9",
+              'Endereço': "Rua das Flores, 100",
+              BairroCidade: "Brotas / Salvador - BA",
+              CEP: "40285-000",
+              WhatsApp: "(71) 99999-8888",
+              Email: c.email,
+              EmergenciaNome: "Maria Souza",
+              EmergenciaTel: "(71) 98888-7777",
+              TítuloEleitor: "123456789012",
+              GrauInstrução: "Superior Completo",
+              PossuiFilhos: "Não",
+              QtdFilhos: "0",
+              DeclararIR: "Não",
+              QtdDepIR: "0",
+              DependentesIR: "",
+              EstadoCivil: "Solteiro(a)",
+              EstadoCivilOutro: "",
+              'NúmeroBota': "40",
+              TamanhoCamisa: "M",
+              'TamanhoCalça': "M",
+              OptanteVT: "Não",
+              'PlanoSaúde': "Opto pelo plano de saúde com inclusão de dependente(s), e autorizo o empregador a descontar mensalmente em folha de pagamento os valores correspondentes de mensalidade e coparticipação.",
+              Dep1Nome: "",
+              Dep1CPF: "",
+              Dep2Nome: "",
+              Dep2CPF: "",
+              TipoAssinatura: "texto"
+            }))
+          };
+        } else {
+          resp = await apiGet({ action: 'getResponses' });
+        }
+        
+        if (resp.success && resp.responses.length > 0) {
+          let finalResponses = resp.responses;
+          if (isFiltered) {
+            const allowedTokens = new Set(filteredCandidates.map(c => c.token));
+            finalResponses = resp.responses.filter(r => allowedTokens.has(r.Token || r.token));
+          }
+          
+          if (finalResponses.length > 0) {
+            // Vamos correlacionar cada resposta para obter a vaga do candidato e extrair Função e Contrato
+            const processedResponses = finalResponses.map(r => {
+              const tokenVal = r.Token || r.token || '';
+              const cand = state.candidates.find(c => c.token === tokenVal);
+              const vaga = cand ? cand.vaga : '';
+              const { funcao, contrato } = extractVagaParts(vaga);
+              
+              const newObj = {};
+              const keys = Object.keys(r);
+              
+              keys.forEach(k => {
+                newObj[k] = r[k] || '';
+                // Inserir Função e Contrato logo após NomeCandidato
+                if (k === 'NomeCandidato') {
+                  newObj['Função'] = funcao;
+                  newObj['Contrato'] = contrato;
+                }
+              });
+              
+              if (!newObj.hasOwnProperty('Função')) {
+                newObj['Função'] = funcao;
+                newObj['Contrato'] = contrato;
+              }
+              
+              return newObj;
+            });
+
+            const headers = Object.keys(processedResponses[0]);
+            const rows    = processedResponses.map(r => headers.map(h => r[h] || ''));
+            const ws2     = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+            ws2['!cols']  = headers.map(() => ({ wch: 20 }));
+            XLSX.utils.book_append_sheet(wb, ws2, 'Respostas do Formulário');
+          }
+        }
+      } catch(e) { 
+        console.error("Erro ao processar respostas para Excel:", e); 
+      }
+
+      XLSX.writeFile(wb, `Premier_RH_Candidatos_${filenameType}_${date}.xlsx`);
+      showToast('✅ Planilha exportada com sucesso!', 'success');
+    }
   } catch(e) { 
     showToast('Erro ao exportar: ' + e.message, 'error'); 
   }

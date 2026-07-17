@@ -590,7 +590,7 @@
           drawSectionHeader("Dados Pessoais");
 
           drawField("NOME COMPLETO", formData.nomeCompleto, marginX, 120);
-          drawField("NOME SOCIAL (SE HOUVER)", formData.nomeSocial || 'Não informado', marginX + 124, 62);
+          drawField("NOME SOCIAL", formData.nomeSocial || 'Não informado', marginX + 124, 62);
           y += 10.0;
 
           drawField("ENDEREÇO RESIDENCIAL", formData.endereco, marginX, 120);
@@ -1108,7 +1108,19 @@
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Nome Social (Se houver)</label>
+                  <div className="flex items-center gap-1.5 mb-1">
+                    <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider">Nome Social</label>
+                    <div className="group relative inline-block cursor-help">
+                      <span className="w-4 h-4 rounded-full bg-slate-100 hover:bg-premier-blue hover:text-white border border-slate-200 flex items-center justify-center text-[10px] font-bold transition-all text-slate-500">
+                        ?
+                      </span>
+                      <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 w-72 bg-slate-800 text-white text-[11px] leading-relaxed p-3 rounded-xl shadow-xl opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity duration-200 z-50">
+                        <span className="font-bold text-premier-gold block mb-1">O que é Nome Social?</span>
+                        É o nome pelo qual pessoas transgênero, travestis ou intersexo preferem ser chamadas no dia a dia, em contraste com o nome civil de registro que não reflete sua identidade de gênero.
+                        <div className="absolute top-full left-1/2 transform -translate-x-1/2 border-4 border-transparent border-t-slate-800"></div>
+                      </div>
+                    </div>
+                  </div>
                   <input
                     type="text"
                     value={formData.nomeSocial}
