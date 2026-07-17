@@ -60,6 +60,22 @@
       -ms-overflow-style: none;
       scrollbar-width: none;
     }
+
+    input[type="text"] {
+      text-transform: uppercase;
+    }
+
+    input[type="text"]::placeholder {
+      text-transform: none;
+    }
+
+    input[type="email"] {
+      text-transform: lowercase;
+    }
+
+    input[type="email"]::placeholder {
+      text-transform: none;
+    }
   </style>
 </head>
 
@@ -238,7 +254,7 @@
             if (data.valid) {
               setVaga(data.vaga || '');
               if (data.nome) {
-                setFormData(prev => ({ ...prev, nomeCompleto: data.nome }));
+                setFormData(prev => ({ ...prev, nomeCompleto: data.nome.toUpperCase() }));
               }
               setIsValidatingToken(false);
             } else {
@@ -263,7 +279,7 @@
                 setFormData(prev => {
                   let newEndereco = prev.endereco;
                   if (data.logradouro) {
-                    newEndereco = data.logradouro;
+                    newEndereco = data.logradouro.toUpperCase();
                   }
                   
                   let newBairroCidade = prev.bairroCidade;
@@ -275,7 +291,7 @@
                     parts.push(cityState);
                   }
                   if (parts.length > 0) {
-                    newBairroCidade = parts.join(' / ');
+                    newBairroCidade = parts.join(' / ').toUpperCase();
                   }
                   
                   return {
@@ -372,7 +388,28 @@
       }, [successMessage]);
 
       const handleInputChange = (field, value, formatter) => {
-        const formattedValue = formatter ? formatter(value) : value;
+        let formattedValue = formatter ? formatter(value) : value;
+        if (typeof formattedValue === 'string') {
+          const uppercaseFields = [
+            'nomeCompleto',
+            'nomeSocial',
+            'endereco',
+            'bairroCidade',
+            'contatoEmergenciaNome',
+            'rg',
+            'estadoCivilOutro',
+            'assinaturaDigitada',
+            'dependente1Nome',
+            'dependente2Nome',
+            'camisaTamanho',
+            'calcaTamanho'
+          ];
+          if (uppercaseFields.includes(field)) {
+            formattedValue = formattedValue.toUpperCase();
+          } else if (field === 'email') {
+            formattedValue = formattedValue.toLowerCase();
+          }
+        }
         setFormData(prev => ({ ...prev, [field]: formattedValue }));
 
         // Clear error for this field
@@ -1358,7 +1395,7 @@
                             value={dep.nome || ''}
                             onChange={(e) => {
                               const newDeps = [...formData.dependentesIR];
-                              newDeps[idx].nome = e.target.value;
+                              newDeps[idx].nome = e.target.value.toUpperCase();
                               setFormData(prev => ({ ...prev, dependentesIR: newDeps }));
                               const errKey = `depIR_${idx}_nome`;
                               if (errors[errKey]) {
