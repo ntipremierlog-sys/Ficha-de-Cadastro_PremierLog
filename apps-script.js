@@ -53,6 +53,10 @@ function doGet(e) {
       case 'resendEmail':     return jsonResponse(resendEmail(e.parameter.token, e.parameter.secret));
       case 'deleteCandidate': return jsonResponse(deleteCandidate(e.parameter.token, e.parameter.secret));
       case 'getDebugInfo':     return jsonResponse(getDebugInfo(e.parameter.secret));
+      case 'resetCandidateStatus': return jsonResponse(resetCandidateStatus(e.parameter.token, e.parameter.secret));
+      case 'cleanTestResponses':   return jsonResponse(cleanTestResponses(e.parameter.secret));
+      case 'syncStatuses':           return jsonResponse(syncStatuses(e.parameter.secret));
+      case 'bulkConcluirByDate':     return jsonResponse(bulkConcluirByDate(e.parameter.secret, e.parameter.dataLimite));
       default:                return jsonResponse({ error: 'Ação inválida: ' + action });
     }
   } catch (err) {
@@ -315,24 +319,36 @@ function submitForm(data) {
   var candidateRow  = -1;
 
   for (var i = 1; i < cData.length; i++) {
-    if (cData[i][4] === token) {
-      if (cData[i][5] === 'Concluído') return { error: 'Formulário já preenchido anteriormente.' };
+    var sheetToken  = String(cData[i][4] || '').trim();
+    var sheetStatus = String(cData[i][5] || '').trim();
+    var reqToken    = String(token || '').trim();
+
+    if (sheetToken === reqToken) {
+      if (sheetStatus === 'Concluído') return { error: 'Formulário já preenchido anteriormente.' };
+      
+      // Atualizar status para Concluído e gravar imediatamente no Google Sheets
       cSheet.getRange(i + 1, 6).setValue('Concluído');
       cSheet.getRange(i + 1, 8).setValue(now);
+      SpreadsheetApp.flush(); // Persiste alteração de status imediatamente
+      
       candidateName = cData[i][1];
       candidateRow  = i + 1;
       break;
     }
   }
 
+  // ⚠️ Token não encontrado — retorna erro imediatamente
+  if (candidateRow === -1) {
+    return { error: 'Token não encontrado. O link pode ser inválido ou expirado.' };
+  }
+
   // ============================================================
-  // SALVAR PDF NO GOOGLE DRIVE
+  // SALVAR PDF NO GOOGLE DRIVE (Isolado em try/catch para não reverter status)
   // ============================================================
   var pdfUrl = '';
   var pdfError = '';
   if (data.pdfBase64 && candidateName) {
     try {
-      // Remove o prefixo data URI (ex: "data:application/pdf;filename=generated.pdf;base64,") de forma robusta
       var base64Data = data.pdfBase64.split(';base64,')[1] || data.pdfBase64;
       var pdfBytes   = Utilities.base64Decode(base64Data);
       var pdfBlob    = Utilities.newBlob(pdfBytes, 'application/pdf',
@@ -346,6 +362,7 @@ function submitForm(data) {
       // Registrar link na aba Candidatos (coluna 9 = índice 8)
       if (candidateRow > 0) {
         cSheet.getRange(candidateRow, 9).setValue(pdfUrl);
+        SpreadsheetApp.flush();
       }
     } catch (err) {
       console.error('Erro ao salvar PDF no Drive:', err);
@@ -353,32 +370,41 @@ function submitForm(data) {
     }
   }
 
-  var rSheet = ss.getSheetByName(SHEET_RESPONSES);
-  var fd     = data.formData || {};
-  var depIR  = (fd.dependentesIR || []).map(function(d) {
-    return (d.nome || '') + ' | CPF: ' + (d.cpf || '') + ' | Parentesco: ' + (d.parentesco || '');
-  }).join(' ;; ');
+  // ============================================================
+  // REGISTRAR RESPOSTA NA ABA RESPOSTAS
+  // ============================================================
+  try {
+    var rSheet = ss.getSheetByName(SHEET_RESPONSES);
+    var fd     = data.formData || {};
+    var depIR  = (fd.dependentesIR || []).map(function(d) {
+      return (d.nome || '') + ' | CPF: ' + (d.cpf || '') + ' | Parentesco: ' + (d.parentesco || '');
+    }).join(' ;; ');
 
-  rSheet.appendRow([
-    token, now, candidateName,
-    fd.nomeCompleto || '', fd.nomeSocial || '',
-    fd.cpf || '', fd.rg || '',
-    fd.endereco || '', fd.bairroCidade || '', fd.cep || '',
-    fd.whatsapp || '', fd.email || '',
-    fd.contatoEmergenciaNome || '', fd.contatoEmergenciaTelefone || '',
-    fd.tituloEleitor || '', fd.grauInstrucao || '',
-    fd.possuiFilhos || '', fd.quantosFilhos || '',
-    fd.declararDependenteIR || '', fd.quantosDependentesIR || '', depIR,
-    fd.estadoCivil || '', fd.estadoCivilOutro || '',
-    fd.botaNumero || '', fd.camisaTamanho || '', fd.calcaTamanho || '',
-    fd.optanteVT || '', fd.planoSaudeOpcao || '',
-    fd.dependente1Nome || '', fd.dependente1Cpf || '',
-    fd.dependente2Nome || '', fd.dependente2Cpf || '',
-    fd.tipoAssinatura || '', pdfUrl
-  ]);
+    rSheet.appendRow([
+      token, now, candidateName,
+      fd.nomeCompleto || '', fd.nomeSocial || '',
+      fd.cpf || '', fd.rg || '',
+      fd.endereco || '', fd.bairroCidade || '', fd.cep || '',
+      fd.whatsapp || '', fd.email || '',
+      fd.contatoEmergenciaNome || '', fd.contatoEmergenciaTelefone || '',
+      fd.tituloEleitor || '', fd.grauInstrucao || '',
+      fd.possuiFilhos || '', fd.quantosFilhos || '',
+      fd.declararDependenteIR || '', fd.quantosDependentesIR || '', depIR,
+      fd.estadoCivil || '', fd.estadoCivilOutro || '',
+      fd.botaNumero || '', fd.camisaTamanho || '', fd.calcaTamanho || '',
+      fd.optanteVT || '', fd.planoSaudeOpcao || '',
+      fd.dependente1Nome || '', fd.dependente1Cpf || '',
+      fd.dependente2Nome || '', fd.dependente2Cpf || '',
+      fd.tipoAssinatura || '', pdfUrl
+    ]);
+    SpreadsheetApp.flush();
+  } catch (errResp) {
+    console.error('Erro ao registrar resposta:', errResp);
+  }
 
   return { success: true, message: 'Formulário recebido com sucesso!', pdfUrl: pdfUrl, pdfError: pdfError };
 }
+
 
 // ============================================================
 // FUNÇÃO: Excluir Candidato (admin)
@@ -390,7 +416,22 @@ function deleteCandidate(token, secret) {
   var data  = sheet.getDataRange().getValues();
 
   for (var i = 1; i < data.length; i++) {
-    if (data[i][4] === token) { sheet.deleteRow(i + 1); return { success: true }; }
+    if (data[i][4] === token) { 
+      sheet.deleteRow(i + 1); 
+      
+      // Também remover da aba Respostas se existir
+      var rSheet = ss.getSheetByName(SHEET_RESPONSES);
+      if (rSheet) {
+        var rData = rSheet.getDataRange().getValues();
+        for (var j = 1; j < rData.length; j++) {
+          if (rData[j][0] === token) {
+            rSheet.deleteRow(j + 1);
+            break;
+          }
+        }
+      }
+      return { success: true }; 
+    }
   }
   return { error: 'Candidato não encontrado' };
 }
@@ -458,4 +499,218 @@ function ensureSheets() {
 function jsonResponse(data) {
   return ContentService.createTextOutput(JSON.stringify(data))
     .setMimeType(ContentService.MimeType.JSON);
+}
+
+function resetCandidateStatus(token, secret) {
+  if (secret !== CONFIG.ADMIN_SECRET) return { error: 'Não autorizado' };
+  var ss = SpreadsheetApp.openById(CONFIG.SPREADSHEET_ID);
+  var cs = ss.getSheetByName(SHEET_CANDIDATES);
+  var cData = cs.getDataRange().getValues();
+  for (var i = 1; i < cData.length; i++) {
+    if (cData[i][4] === token) {
+      cs.getRange(i + 1, 6).setValue('Pendente');
+      cs.getRange(i + 1, 8).setValue('');
+      
+      // Também remover da aba Respostas se existir
+      var rs = ss.getSheetByName(SHEET_RESPONSES);
+      var rData = rs.getDataRange().getValues();
+      for (var j = 1; j < rData.length; j++) {
+        if (rData[j][0] === token) {
+          rs.deleteRow(j + 1);
+          break;
+        }
+      }
+      return { success: true };
+    }
+  }
+  return { error: 'Candidato não encontrado' };
+}
+
+function cleanTestResponses(secret) {
+  if (secret !== CONFIG.ADMIN_SECRET) return { error: 'Não autorizado' };
+  var ss = SpreadsheetApp.openById(CONFIG.SPREADSHEET_ID);
+  var rs = ss.getSheetByName(SHEET_RESPONSES);
+  if (!rs) return { success: true, message: 'Aba Respostas não encontrada' };
+  
+  var data = rs.getDataRange().getValues();
+  var deletedCount = 0;
+  var namesToRemove = [
+    'geovanna correia andrade',
+    'ademir do nascimento santana',
+    'geovanna c andrade',
+    'geovanna andrade',
+    'gabrielly mendes dos santos',
+    'gabrielly mendes',
+    'rafael araujo',
+    'priscila facchinetti',
+    'teste pdf sistema',
+    'teste drive pdf',
+    'teste log pdfteste automatizado pdf'
+  ];
+  
+  for (var i = data.length - 1; i >= 1; i--) {
+    var nameInRow = String(data[i][2] || '').toLowerCase().trim(); // NomeCandidato
+    var fullNameInRow = String(data[i][3] || '').toLowerCase().trim(); // NomeCompleto
+    
+    var shouldDelete = namesToRemove.some(function(name) {
+      return nameInRow.indexOf(name) !== -1 || fullNameInRow.indexOf(name) !== -1;
+    });
+    
+    if (shouldDelete) {
+      rs.deleteRow(i + 1);
+      deletedCount++;
+    }
+  }
+  return { success: true, deletedCount: deletedCount };
+}
+
+// ============================================================
+// FUNÇÃO: Sincronizar Status — cruza Respostas × Candidatos
+// Para cada token presente na aba Respostas, se o candidato
+// ainda estiver como "Pendente" na aba Candidatos, atualiza
+// para "Concluído" e preenche a data de preenchimento.
+// ============================================================
+function syncStatuses(secret) {
+  if (secret !== CONFIG.ADMIN_SECRET) return { error: 'Não autorizado' };
+  ensureSheets();
+
+  var ss      = SpreadsheetApp.openById(CONFIG.SPREADSHEET_ID);
+  var cSheet  = ss.getSheetByName(SHEET_CANDIDATES);
+  var rSheet  = ss.getSheetByName(SHEET_RESPONSES);
+
+  var cData   = cSheet.getDataRange().getValues();
+  var rData   = rSheet.getDataRange().getValues();
+
+  // Construir um mapa: token → { dataPreenchimento, pdfUrl } a partir das Respostas
+  // Colunas Respostas: [0]=Token [1]=DataPreenchimento [2]=NomeCandidato ... [last]=PDFUrl
+  var responseMap = {};
+  for (var r = 1; r < rData.length; r++) {
+    var tok  = String(rData[r][0] || '').trim();
+    var date = String(rData[r][1] || '').trim();
+    var pdf  = String(rData[r][rData[r].length - 1] || '').trim();
+    if (tok) responseMap[tok] = { date: date, pdf: pdf };
+  }
+
+  var updated = 0;
+  var skipped = 0;
+
+  // Percorrer candidatos e corrigir os que têm resposta mas estão Pendente
+  for (var i = 1; i < cData.length; i++) {
+    var candidateToken  = String(cData[i][4] || '').trim();
+    var candidateStatus = String(cData[i][5] || '').trim();
+
+    if (!candidateToken) continue;
+
+    if (responseMap[candidateToken]) {
+      // Há resposta para este token
+      if (candidateStatus !== 'Concluído') {
+        // Marcar como Concluído
+        cSheet.getRange(i + 1, 6).setValue('Concluído');
+
+        // Preencher data de preenchimento se estiver vazia
+        if (!cData[i][7] && responseMap[candidateToken].date) {
+          cSheet.getRange(i + 1, 8).setValue(responseMap[candidateToken].date);
+        }
+
+        // Preencher PDF URL se estiver vazia
+        if (!cData[i][8] && responseMap[candidateToken].pdf) {
+          cSheet.getRange(i + 1, 9).setValue(responseMap[candidateToken].pdf);
+        }
+
+        updated++;
+        Logger.log('✅ Corrigido: ' + cData[i][1] + ' | Token: ' + candidateToken);
+      } else {
+        skipped++; // Já estava Concluído — OK
+      }
+    }
+  }
+
+  return {
+    success: true,
+    updated: updated,
+    alreadyCorrect: skipped,
+    message: updated + ' candidato(s) tiveram o status corrigido para Concluído. ' + skipped + ' já estavam corretos.'
+  };
+}
+
+// ============================================================
+// FUNÇÃO: Marcar em massa como Concluído até uma data limite
+// Percorre todos os candidatos com status "Pendente" e
+// dataEnvio <= dataLimite, atualizando para "Concluído".
+// Parâmetro dataLimite: formato 'YYYY-MM-DD' (ex: '2026-07-22')
+// ============================================================
+function bulkConcluirByDate(secret, dataLimite) {
+  if (secret !== CONFIG.ADMIN_SECRET) return { error: 'Não autorizado' };
+  if (!dataLimite) return { error: 'Parâmetro dataLimite é obrigatório (formato: YYYY-MM-DD)' };
+
+  // Converter a data limite para timestamp (fim do dia: 23:59:59)
+  var limiteParts = dataLimite.split('-');
+  if (limiteParts.length !== 3) return { error: 'Formato de data inválido. Use YYYY-MM-DD' };
+  var limiteDate = new Date(parseInt(limiteParts[0]), parseInt(limiteParts[1]) - 1, parseInt(limiteParts[2]), 23, 59, 59, 999);
+
+  ensureSheets();
+  var ss     = SpreadsheetApp.openById(CONFIG.SPREADSHEET_ID);
+  var cSheet = ss.getSheetByName(SHEET_CANDIDATES);
+  var cData  = cSheet.getDataRange().getValues();
+
+  var updated  = 0;
+  var skipped  = 0;
+  var errors   = [];
+  var updatedNames = [];
+
+  for (var i = 1; i < cData.length; i++) {
+    var status    = String(cData[i][5] || '').trim();
+    var dataEnvio = cData[i][6]; // Coluna DataEnvio (índice 6)
+
+    // Só processa candidatos Pendentes
+    if (status !== 'Pendente') { skipped++; continue; }
+
+    // Converter dataEnvio para Date
+    var envioDate = null;
+    if (dataEnvio instanceof Date) {
+      envioDate = dataEnvio;
+    } else if (typeof dataEnvio === 'string' && dataEnvio.trim() !== '') {
+      // Tentar parsear formatos comuns: 'dd/MM/yyyy HH:mm' ou ISO
+      var iso = dataEnvio.trim();
+      envioDate = new Date(iso);
+      if (isNaN(envioDate.getTime())) {
+        // Tentar formato 'dd/MM/yyyy HH:mm'
+        var match = iso.match(/^(\d{2})\/(\d{2})\/(\d{4})\s+(\d{2}):(\d{2})/);
+        if (match) {
+          envioDate = new Date(parseInt(match[3]), parseInt(match[2]) - 1, parseInt(match[1]), parseInt(match[4]), parseInt(match[5]));
+        }
+      }
+    } else if (typeof dataEnvio === 'number') {
+      // Número serial do Google Sheets (dias desde 30/12/1899)
+      envioDate = new Date((dataEnvio - 25569) * 86400 * 1000);
+    }
+
+    if (!envioDate || isNaN(envioDate.getTime())) {
+      errors.push('Linha ' + (i + 1) + ': data de envio inválida (' + dataEnvio + ')');
+      continue;
+    }
+
+    // Verificar se dataEnvio <= dataLimite
+    if (envioDate <= limiteDate) {
+      try {
+        cSheet.getRange(i + 1, 6).setValue('Concluído');
+        updated++;
+        updatedNames.push(cData[i][1] + ' (envio: ' + envioDate.toISOString().substring(0, 10) + ')');
+        Logger.log('✅ Marcado como Concluído: ' + cData[i][1] + ' | DataEnvio: ' + envioDate.toISOString());
+      } catch (err) {
+        errors.push('Linha ' + (i + 1) + ': ' + err.message);
+      }
+    } else {
+      skipped++;
+    }
+  }
+
+  return {
+    success: true,
+    updated: updated,
+    skipped: skipped,
+    errors: errors,
+    updatedNames: updatedNames,
+    message: updated + ' candidato(s) marcados como Concluído. ' + skipped + ' ignorados (já Concluído ou após a data limite). ' + errors.length + ' erro(s).'
+  };
 }
