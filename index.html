@@ -213,9 +213,10 @@
 
       const [token, setToken] = useState(null);
       const [vaga, setVaga] = useState('');
-      const hasHealthPlan = !token || vaga.includes('1268') || vaga.includes('158');
+      const vagaLower = (vaga || '').toLowerCase();
+      const hasHealthPlan = !token || vagaLower.includes('1268') || vagaLower.includes('158') || vagaLower.includes('salvador') || vagaLower.includes('teca');
       // Contrato 618 - Indaiatuba não oferece Vale Transporte
-      const hasVT = !vaga.includes('618');
+      const hasVT = !vagaLower.includes('618');
       const [isValidatingToken, setIsValidatingToken] = useState(true);
       const [tokenError, setTokenError] = useState(null);
       const [isFormSubmitted, setIsFormSubmitted] = useState(false);

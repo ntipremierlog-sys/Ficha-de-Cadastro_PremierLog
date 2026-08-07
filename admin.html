@@ -1567,8 +1567,9 @@ async function generateCandidateLocalPDF(token, nome) {
     // Obter dados da vaga a partir do state.candidates
     const cand = state.candidates.find(c => c.token === token);
     const vaga = cand ? cand.vaga : '';
-    const hasHealthPlan = vaga.includes('1268') || vaga.includes('158');
-    const hasVT = !vaga.includes('618');
+    const vagaLower = (vaga || '').toLowerCase();
+    const hasHealthPlan = vagaLower.includes('1268') || vagaLower.includes('158') || vagaLower.includes('salvador') || vagaLower.includes('teca');
+    const hasVT = !vagaLower.includes('618');
 
     // Mapeamento das chaves da planilha para a estrutura do PDF
     const formData = {
