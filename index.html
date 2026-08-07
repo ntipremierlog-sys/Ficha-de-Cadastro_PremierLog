@@ -677,10 +677,10 @@
                 doc.setFont("helvetica", "bold");
                 doc.setFontSize(9.5);
                 const textWidth = doc.getTextWidth("PLANO DE SAÚDE");
-                const logoHeight = 9.0; // mm
-                const logoWidth = logoHeight * 2.6456; // ~23.8 mm (natural aspect ratio 1463x553)
+                const logoHeight = 13.0; // mm
+                const logoWidth = logoHeight * 2.6456; // ~34.4 mm (natural aspect ratio 1463x553)
                 const logoX = marginX + textWidth + 4.0;
-                doc.addImage(BRADESCO_LOGO_BASE64, 'PNG', logoX, y - 11.5, logoWidth, logoHeight);
+                doc.addImage(BRADESCO_LOGO_BASE64, 'PNG', logoX, y - 14.5, logoWidth, logoHeight);
               } catch (err) {
                 console.error("Error drawing Bradesco Saúde logo in PDF:", err);
               }
