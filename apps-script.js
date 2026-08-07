@@ -44,20 +44,21 @@ function doGet(e) {
   const action = (e.parameter.action || '').trim();
   try {
     switch (action) {
-      case 'ping':            return jsonResponse({ ok: true, ts: new Date().toISOString() });
-      case 'validateToken':   return jsonResponse(validateToken(e.parameter.token));
-      case 'getCandidates':   return jsonResponse(getCandidates(e.parameter.secret));
-      case 'getResponse':     return jsonResponse(getResponse(e.parameter.token, e.parameter.secret));
-      case 'getResponses':    return jsonResponse(getAllResponses(e.parameter.secret));
-      case 'addCandidate':    return jsonResponse(addCandidate(e.parameter));
-      case 'resendEmail':     return jsonResponse(resendEmail(e.parameter.token, e.parameter.secret));
-      case 'deleteCandidate': return jsonResponse(deleteCandidate(e.parameter.token, e.parameter.secret));
-      case 'getDebugInfo':     return jsonResponse(getDebugInfo(e.parameter.secret));
-      case 'resetCandidateStatus': return jsonResponse(resetCandidateStatus(e.parameter.token, e.parameter.secret));
-      case 'cleanTestResponses':   return jsonResponse(cleanTestResponses(e.parameter.secret));
-      case 'syncStatuses':           return jsonResponse(syncStatuses(e.parameter.secret));
-      case 'bulkConcluirByDate':     return jsonResponse(bulkConcluirByDate(e.parameter.secret, e.parameter.dataLimite));
-      default:                return jsonResponse({ error: 'Ação inválida: ' + action });
+      case 'ping':                    return jsonResponse({ ok: true, ts: new Date().toISOString() });
+      case 'validateToken':           return jsonResponse(validateToken(e.parameter.token));
+      case 'getCandidates':           return jsonResponse(getCandidates(e.parameter.secret));
+      case 'getResponse':             return jsonResponse(getResponse(e.parameter.token, e.parameter.secret));
+      case 'getResponses':            return jsonResponse(getAllResponses(e.parameter.secret));
+      case 'addCandidate':            return jsonResponse(addCandidate(e.parameter));
+      case 'resendEmail':             return jsonResponse(resendEmail(e.parameter.token, e.parameter.secret));
+      case 'deleteCandidate':         return jsonResponse(deleteCandidate(e.parameter.token, e.parameter.secret));
+      case 'getDebugInfo':            return jsonResponse(getDebugInfo(e.parameter.secret));
+      case 'resetCandidateStatus':    return jsonResponse(resetCandidateStatus(e.parameter.token, e.parameter.secret));
+      case 'cleanTestResponses':      return jsonResponse(cleanTestResponses(e.parameter.secret));
+      case 'syncStatuses':            return jsonResponse(syncStatuses(e.parameter.secret));
+      case 'bulkConcluirByDate':      return jsonResponse(bulkConcluirByDate(e.parameter.secret, e.parameter.dataLimite));
+      case 'auditarRespostasFaltantes': return jsonResponse(auditarRespostasFaltantes(e.parameter.secret));
+      default:                        return jsonResponse({ error: 'Ação inválida: ' + action });
     }
   } catch (err) {
     console.error('doGet error:', err);
@@ -122,6 +123,7 @@ function doPost(e) {
     Logger.log('action: ' + data.action);
     Logger.log('pdfBase64 presente: ' + (data.pdfBase64 ? 'SIM (' + data.pdfBase64.length + ' chars)' : 'NÃO'));
     if (data.action === 'submitForm') return jsonResponse(submitForm(data));
+    if (data.action === 'uploadPDF') return jsonResponse(uploadPDF(data));
     return jsonResponse({ error: 'Ação POST inválida' });
   } catch (err) {
     Logger.log('doPost ERRO: ' + err.message);
@@ -305,47 +307,67 @@ function getAllResponses(secret) {
 
 // ============================================================
 // FUNÇÃO: Salvar Formulário (candidato)
+// CORRIGIDO: LockService (escopo reduzido) + nova ordem + retry + log de erros
+// O lock cobre APENAS as operações de planilha (rápidas).
+// O PDF é gerado FORA do lock para não bloquear submissões simultâneas.
 // ============================================================
 function submitForm(data) {
   var token = data.token;
   if (!token) return { error: 'Token não fornecido' };
-  ensureSheets();
 
-  var ss      = SpreadsheetApp.openById(CONFIG.SPREADSHEET_ID);
-  var cSheet  = ss.getSheetByName(SHEET_CANDIDATES);
-  var cData   = cSheet.getDataRange().getValues();
-  var now     = formatDate(new Date());
-  var candidateName = '';
-  var candidateRow  = -1;
+  var ss     = SpreadsheetApp.openById(CONFIG.SPREADSHEET_ID);
+  var cSheet = ss.getSheetByName(SHEET_CANDIDATES);
+  if (!cSheet) return { error: 'Planilha de candidatos não encontrada.' };
 
-  for (var i = 1; i < cData.length; i++) {
-    var sheetToken  = String(cData[i][4] || '').trim();
-    var sheetStatus = String(cData[i][5] || '').trim();
-    var reqToken    = String(token || '').trim();
+  // ============================================================
+  // LOCK ESCOPO 1: verificar status e reservar o token
+  // Lock curto — apenas leitura + marcação de reserva.
+  // ============================================================
+  var lock = LockService.getScriptLock();
+  var lockObtido = false;
+  try { lockObtido = lock.tryLock(15000); } catch(e) {}
 
-    if (sheetToken === reqToken) {
-      if (sheetStatus === 'Concluído') return { error: 'Formulário já preenchido anteriormente.' };
-      
-      // Atualizar status para Concluído e gravar imediatamente no Google Sheets
-      cSheet.getRange(i + 1, 6).setValue('Concluído');
-      cSheet.getRange(i + 1, 8).setValue(now);
-      SpreadsheetApp.flush(); // Persiste alteração de status imediatamente
-      
-      candidateName = cData[i][1];
-      candidateRow  = i + 1;
-      break;
-    }
+  if (!lockObtido) {
+    return {
+      error: 'O servidor está processando outra submissão. Aguarde alguns segundos e tente novamente.',
+      code: 'LOCK_TIMEOUT'
+    };
   }
 
-  // ⚠️ Token não encontrado — retorna erro imediatamente
+  var candidateName  = '';
+  var candidateRow   = -1;
+  var candidateEmail = '';
+  var now            = formatDate(new Date());
+
+  try {
+    var cData = cSheet.getDataRange().getValues();
+    var reqToken = String(token || '').trim();
+
+    for (var i = 1; i < cData.length; i++) {
+      if (String(cData[i][4] || '').trim() === reqToken) {
+        if (String(cData[i][5] || '').trim() === 'Concluído') {
+          return { error: 'Formulário já preenchido anteriormente.' };
+        }
+        candidateName  = cData[i][1];
+        candidateEmail = cData[i][2] || '';
+        candidateRow   = i + 1;
+        break;
+      }
+    }
+  } finally {
+    // Liberar lock IMEDIATAMENTE após verificar o status
+    try { lock.releaseLock(); } catch(e) {}
+  }
+
   if (candidateRow === -1) {
     return { error: 'Token não encontrado. O link pode ser inválido ou expirado.' };
   }
 
   // ============================================================
-  // SALVAR PDF NO GOOGLE DRIVE (Isolado em try/catch para não reverter status)
+  // SALVAR PDF NO GOOGLE DRIVE — FORA DO LOCK (operação lenta)
+  // Múltiplas submissões podem gerar PDFs em paralelo.
   // ============================================================
-  var pdfUrl = '';
+  var pdfUrl   = '';
   var pdfError = '';
   if (data.pdfBase64 && candidateName) {
     try {
@@ -353,34 +375,41 @@ function submitForm(data) {
       var pdfBytes   = Utilities.base64Decode(base64Data);
       var pdfBlob    = Utilities.newBlob(pdfBytes, 'application/pdf',
         'Ficha_Cadastro_' + candidateName.replace(/\s+/g, '_').substring(0, 30) + '.pdf');
-
       var folder = DriveApp.getFolderById(CONFIG.DRIVE_FOLDER_ID);
       var file   = folder.createFile(pdfBlob);
       file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
       pdfUrl = 'https://drive.google.com/file/d/' + file.getId() + '/view';
-
-      // Registrar link na aba Candidatos (coluna 9 = índice 8)
-      if (candidateRow > 0) {
-        cSheet.getRange(candidateRow, 9).setValue(pdfUrl);
-        SpreadsheetApp.flush();
-      }
-    } catch (err) {
-      console.error('Erro ao salvar PDF no Drive:', err);
-      pdfError = err.message;
+      Logger.log('PDF salvo no Drive: ' + pdfUrl);
+    } catch (pdfErr) {
+      pdfError = pdfErr.message;
+      Logger.log('⚠️ Erro ao salvar PDF (não crítico): ' + pdfError);
+      _registrarErro(ss, token, candidateName, 'PDF_FALHOU', pdfError);
     }
   }
 
   // ============================================================
-  // REGISTRAR RESPOSTA NA ABA RESPOSTAS
+  // LOCK ESCOPO 2: gravar dados na planilha (appendRow + status)
+  // Segundo lock curto — apenas escritas na planilha.
   // ============================================================
+  var lock2 = LockService.getScriptLock();
+  var lock2Obtido = false;
+  try { lock2Obtido = lock2.tryLock(15000); } catch(e) {}
+
+  if (!lock2Obtido) {
+    _registrarErro(ss, token, candidateName, 'LOCK2_TIMEOUT', 'Não foi possível obter lock para gravar resposta');
+    return {
+      error: 'Servidor ocupado ao gravar dados. Tente novamente.',
+      code: 'LOCK_TIMEOUT'
+    };
+  }
+
   try {
-    var rSheet = ss.getSheetByName(SHEET_RESPONSES);
-    var fd     = data.formData || {};
-    var depIR  = (fd.dependentesIR || []).map(function(d) {
+    var fd    = data.formData || {};
+    var depIR = (fd.dependentesIR || []).map(function(d) {
       return (d.nome || '') + ' | CPF: ' + (d.cpf || '') + ' | Parentesco: ' + (d.parentesco || '');
     }).join(' ;; ');
 
-    rSheet.appendRow([
+    var rowData = [
       token, now, candidateName,
       fd.nomeCompleto || '', fd.nomeSocial || '',
       fd.cpf || '', fd.rg || '',
@@ -396,13 +425,141 @@ function submitForm(data) {
       fd.dependente1Nome || '', fd.dependente1Cpf || '',
       fd.dependente2Nome || '', fd.dependente2Cpf || '',
       fd.tipoAssinatura || '', pdfUrl
-    ]);
+    ];
+
+    // Retry até 3 tentativas no appendRow
+    var respostaSalva = false;
+    var respostaErro  = '';
+    for (var tentativa = 1; tentativa <= 3; tentativa++) {
+      try {
+        var rSheet = ss.getSheetByName(SHEET_RESPONSES);
+        rSheet.appendRow(rowData);
+        SpreadsheetApp.flush();
+        respostaSalva = true;
+        Logger.log('✅ Resposta gravada na tentativa ' + tentativa);
+        break;
+      } catch (errResp) {
+        respostaErro = errResp.message;
+        Logger.log('⚠️ Tentativa ' + tentativa + ' falhou: ' + respostaErro);
+        if (tentativa < 3) Utilities.sleep(800);
+      }
+    }
+
+    if (!respostaSalva) {
+      var errMsg = 'Falha ao gravar dados após 3 tentativas: ' + respostaErro;
+      Logger.log('❌ ' + errMsg);
+      _registrarErro(ss, token, candidateName, 'RESPOSTA_NAO_SALVA', errMsg);
+      return {
+        success: false,
+        responseError: errMsg,
+        message: 'Erro interno ao salvar respostas. Tente novamente. Se persistir, contate o RH.',
+        pdfUrl: pdfUrl,
+        pdfError: pdfError
+      };
+    }
+
+    // Gravar status Concluído APÓS confirmação da gravação em Respostas
+    cSheet.getRange(candidateRow, 6).setValue('Concluído');
+    cSheet.getRange(candidateRow, 8).setValue(now);
+    if (pdfUrl) cSheet.getRange(candidateRow, 9).setValue(pdfUrl);
     SpreadsheetApp.flush();
-  } catch (errResp) {
-    console.error('Erro ao registrar resposta:', errResp);
+    Logger.log('✅ Status Concluído gravado para: ' + candidateName);
+
+    return {
+      success: true,
+      message: 'Formulário recebido com sucesso!',
+      pdfUrl: pdfUrl,
+      pdfError: pdfError
+    };
+
+  } finally {
+    try { lock2.releaseLock(); } catch(e) {}
+  }
+}
+
+
+// ============================================================
+// FUNÇÃO: Carregar PDF em segundo plano (candidato)
+// ============================================================
+function uploadPDF(data) {
+  var token = data.token;
+  if (!token) return { error: 'Token não fornecido' };
+  if (!data.pdfBase64) return { error: 'PDF em base64 não fornecido' };
+
+  var ss     = SpreadsheetApp.openById(CONFIG.SPREADSHEET_ID);
+  var cSheet = ss.getSheetByName(SHEET_CANDIDATES);
+  var rSheet = ss.getSheetByName(SHEET_RESPONSES);
+  if (!cSheet || !rSheet) return { error: 'Planilhas de controle não encontradas.' };
+
+  var candidateName = '';
+  var candidateRow  = -1;
+
+  var cData = cSheet.getDataRange().getValues();
+  var reqToken = String(token || '').trim();
+
+  for (var i = 1; i < cData.length; i++) {
+    if (String(cData[i][4] || '').trim() === reqToken) {
+      candidateName = cData[i][1];
+      candidateRow  = i + 1;
+      break;
+    }
   }
 
-  return { success: true, message: 'Formulário recebido com sucesso!', pdfUrl: pdfUrl, pdfError: pdfError };
+  if (candidateRow === -1) {
+    return { error: 'Candidato não encontrado para este token.' };
+  }
+
+  var pdfUrl = '';
+  try {
+    var base64Data = data.pdfBase64.split(';base64,')[1] || data.pdfBase64;
+    var pdfBytes   = Utilities.base64Decode(base64Data);
+    var pdfBlob    = Utilities.newBlob(pdfBytes, 'application/pdf',
+      'Ficha_Cadastro_' + candidateName.replace(/\s+/g, '_').substring(0, 30) + '.pdf');
+    var folder = DriveApp.getFolderById(CONFIG.DRIVE_FOLDER_ID);
+    var file   = folder.createFile(pdfBlob);
+    file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+    pdfUrl = 'https://drive.google.com/file/d/' + file.getId() + '/view';
+    Logger.log('PDF salvo em segundo plano via uploadPDF: ' + pdfUrl);
+
+    // Atualizar link na planilha de Candidatos (coluna 9, index 8)
+    cSheet.getRange(candidateRow, 9).setValue(pdfUrl);
+
+    // Atualizar link na planilha de Respostas
+    var rData = rSheet.getDataRange().getValues();
+    var pdfCol = rData[0].indexOf('PDFUrl') + 1;
+    if (pdfCol <= 0) pdfCol = rData[0].length;
+    for (var j = 1; j < rData.length; j++) {
+      if (String(rData[j][0] || '').trim() === reqToken) {
+        rSheet.getRange(j + 1, pdfCol).setValue(pdfUrl);
+        break;
+      }
+    }
+
+    SpreadsheetApp.flush();
+    return { success: true, pdfUrl: pdfUrl };
+
+  } catch (pdfErr) {
+    Logger.log('❌ Erro no upload do PDF: ' + pdfErr.message);
+    _registrarErro(ss, token, candidateName, 'UPLOAD_PDF_FALHOU', pdfErr.message);
+    return { error: pdfErr.message };
+  }
+}
+
+
+// ============================================================
+// AUXILIAR PRIVADO: Registrar incidente na aba Erros_Submissao
+// ============================================================
+function _registrarErro(ss, token, nome, tipoErro, mensagem) {
+  try {
+    var errSheet = ss.getSheetByName('Erros_Submissao');
+    if (!errSheet) return; // ensureSheets cria a aba; se não existir, ignora silenciosamente
+    var ts = formatDate(new Date());
+    errSheet.appendRow([token, nome, ts, tipoErro, mensagem]);
+    SpreadsheetApp.flush();
+  } catch(e) {
+    // Não propagar erro de log — apenas registrar no console
+    Logger.log('Falha ao registrar erro em Erros_Submissao: ' + e.message);
+  }
 }
 
 
@@ -493,6 +650,15 @@ function ensureSheets() {
       'TamanhoCalça','OptanteVT','PlanoSaúde','Dep1Nome','Dep1CPF','Dep2Nome','Dep2CPF','TipoAssinatura','PDFUrl']);
     rs.setFrozenRows(1);
     rs.getRange('1:1').setFontWeight('bold').setBackground('#211551').setFontColor('white');
+  }
+
+  // Aba de log de erros de submissão (criada automaticamente se não existir)
+  var es = ss.getSheetByName('Erros_Submissao');
+  if (!es) es = ss.insertSheet('Erros_Submissao');
+  if (es.getLastRow() === 0) {
+    es.appendRow(['Token','NomeCandidato','Timestamp','TipoErro','MensagemErro']);
+    es.setFrozenRows(1);
+    es.getRange('1:1').setFontWeight('bold').setBackground('#7f1d1d').setFontColor('white');
   }
 }
 
@@ -713,4 +879,188 @@ function bulkConcluirByDate(secret, dataLimite) {
     updatedNames: updatedNames,
     message: updated + ' candidato(s) marcados como Concluído. ' + skipped + ' ignorados (já Concluído ou após a data limite). ' + errors.length + ' erro(s).'
   };
+}
+
+// ============================================================
+// FUNÇÃO: Auditoria Retroativa — Concluído sem linha em Respostas
+// Cruza a aba Candidatos (status = Concluído) com a aba Respostas
+// por token e lista todos os candidatos afetados pelo bug anterior.
+// Uso: chamar via doGet com ?action=auditarRespostasFaltantes&secret=...
+// ou executar diretamente no editor do Apps Script.
+// ============================================================
+function auditarRespostasFaltantes(secret) {
+  if (secret !== CONFIG.ADMIN_SECRET) return { error: 'Não autorizado' };
+  ensureSheets();
+
+  var ss     = SpreadsheetApp.openById(CONFIG.SPREADSHEET_ID);
+  var cSheet = ss.getSheetByName(SHEET_CANDIDATES);
+  var rSheet = ss.getSheetByName(SHEET_RESPONSES);
+
+  var cData  = cSheet.getDataRange().getValues();
+  var rData  = rSheet.getDataRange().getValues();
+
+  // Construir mapa de tokens presentes na aba Respostas
+  var tokensComResposta = {};
+  for (var r = 1; r < rData.length; r++) {
+    var tok = String(rData[r][0] || '').trim();
+    if (tok) tokensComResposta[tok] = true;
+  }
+
+  var afetados = [];
+  for (var i = 1; i < cData.length; i++) {
+    var cToken  = String(cData[i][4] || '').trim();
+    var cStatus = String(cData[i][5] || '').trim();
+    if (cStatus === 'Concluído' && cToken && !tokensComResposta[cToken]) {
+      var caso = {
+        linha:             i + 1,
+        id:                cData[i][0] || '',
+        nome:              cData[i][1] || '',
+        email:             cData[i][2] || '',
+        vaga:              cData[i][3] || '',
+        token:             cToken,
+        dataEnvio:         String(cData[i][6] || ''),
+        dataPreenchimento: String(cData[i][7] || ''),
+        pdfUrl:            String(cData[i][8] || '')
+      };
+      afetados.push(caso);
+
+      // Registrar cada caso na aba Erros_Submissao para rastreabilidade
+      _registrarErro(
+        ss,
+        cToken,
+        caso.nome,
+        'AUDITORIA_RESPOSTA_FALTANTE',
+        'Candidato marcado Concluído em ' + caso.dataPreenchimento + ' mas sem linha em Respostas'
+      );
+
+      Logger.log('⚠️ AUDITORIA — Sem resposta: ' + caso.nome + ' | Token: ' + cToken);
+    }
+  }
+
+  return {
+    success: true,
+    totalAfetados: afetados.length,
+    afetados: afetados,
+    message: afetados.length === 0
+      ? '✅ Nenhum candidato afetado encontrado. Todos os Concluído têm linha em Respostas.'
+      : '⚠️ ' + afetados.length + ' candidato(s) marcados como Concluído SEM dados em Respostas. Verifique a aba Erros_Submissao e a lista retornada.'
+  };
+}
+
+// ============================================================
+// FUNÇÃO DE TESTE: Simula duas submissões em sequência rápida
+// Execute manualmente no editor do Apps Script para validar
+// que ambas as linhas de Respostas são gravadas corretamente.
+// IMPORTANTE: edite TOKEN_TESTE_1 e TOKEN_TESTE_2 com tokens
+// reais de dois candidatos com status Pendente na planilha.
+// ============================================================
+function testarConcorrencia() {
+  // ⚠️ Substitua pelos tokens reais de dois candidatos Pendentes
+  var TOKEN_TESTE_1 = 'TOKEN_PENDENTE_1'; // editar antes de executar
+  var TOKEN_TESTE_2 = 'TOKEN_PENDENTE_2'; // editar antes de executar
+
+  var dadosFake = function(token, nome) {
+    return {
+      action: 'submitForm',
+      token: token,
+      pdfBase64: null,
+      formData: {
+        nomeCompleto: nome,
+        cpf: '000.000.000-00',
+        rg: '0000000',
+        email: 'teste@premierlog.com',
+        whatsapp: '(11) 99999-9999',
+        endereco: 'Rua Teste, 1',
+        bairroCidade: 'Centro — São Paulo/SP',
+        cep: '00000-000',
+        estadoCivil: 'Solteiro(a)',
+        grauInstrucao: 'Superior Completo',
+        possuiFilhos: 'Não',
+        optanteVT: 'Sim',
+        planoSaudeOpcao: 'Bradesco',
+        tipoAssinatura: 'digital',
+        dependentesIR: []
+      }
+    };
+  };
+
+  Logger.log('=== INÍCIO DO TESTE DE CONCORRÊNCIA ===');
+
+  var resultado1 = submitForm(dadosFake(TOKEN_TESTE_1, 'Candidato Teste 1'));
+  Logger.log('Resultado 1: ' + JSON.stringify(resultado1));
+
+  // Chamada imediata — simula segunda requisição em paralelo
+  var resultado2 = submitForm(dadosFake(TOKEN_TESTE_2, 'Candidato Teste 2'));
+  Logger.log('Resultado 2: ' + JSON.stringify(resultado2));
+
+  // Verificar que ambas as linhas existem em Respostas
+  var ss     = SpreadsheetApp.openById(CONFIG.SPREADSHEET_ID);
+  var rSheet = ss.getSheetByName(SHEET_RESPONSES);
+  var rData  = rSheet.getDataRange().getValues();
+
+  var encontrou1 = false, encontrou2 = false;
+  for (var i = 1; i < rData.length; i++) {
+    if (String(rData[i][0]).trim() === TOKEN_TESTE_1.trim()) encontrou1 = true;
+    if (String(rData[i][0]).trim() === TOKEN_TESTE_2.trim()) encontrou2 = true;
+  }
+
+  Logger.log('Token 1 em Respostas: ' + (encontrou1 ? '✅ SIM' : '❌ NÃO'));
+  Logger.log('Token 2 em Respostas: ' + (encontrou2 ? '✅ SIM' : '❌ NÃO'));
+
+  var ok = encontrou1 && encontrou2
+    && resultado1.success === true
+    && resultado2.success === true;
+
+  Logger.log('=== RESULTADO FINAL: ' + (ok ? '✅ PASSOU' : '❌ FALHOU') + ' ===');
+  return {
+    passou: ok,
+    resultado1: resultado1,
+    resultado2: resultado2,
+    token1EmRespostas: encontrou1,
+    token2EmRespostas: encontrou2
+  };
+}
+
+// ============================================================
+// AUXILIAR DE AUDITORIA — Execute esta função diretamente no
+// editor do Apps Script (sem precisar passar a senha pela URL).
+// Selecione "executarAuditoria" no menu de funções e clique ▶️
+// ============================================================
+function executarAuditoria() {
+  var resultado = auditarRespostasFaltantes(CONFIG.ADMIN_SECRET);
+  Logger.log(JSON.stringify(resultado, null, 2));
+}
+
+// ============================================================
+// AUDITORIA REFINADA — Filtra apenas vítimas REAIS do bug:
+// candidatos que DE FATO preencheram o formulário (têm
+// dataPreenchimento preenchida) mas não têm linha em Respostas.
+// Ignora candidatos fechados em massa sem terem preenchido.
+// ============================================================
+function executarAuditoriaFiltrada() {
+  var resultado = auditarRespostasFaltantes(CONFIG.ADMIN_SECRET);
+  if (!resultado.success) { Logger.log('Erro: ' + resultado.error); return; }
+
+  // Filtra apenas quem tem dataPreenchimento preenchida (realmente submeteu)
+  var vitimas = (resultado.afetados || []).filter(function(c) {
+    return c.dataPreenchimento && c.dataPreenchimento.trim() !== '';
+  });
+
+  // Quem foi fechado em massa sem ter preenchido (dataPreenchimento vazia)
+  var fechadosEmMassa = (resultado.afetados || []).filter(function(c) {
+    return !c.dataPreenchimento || c.dataPreenchimento.trim() === '';
+  });
+
+  Logger.log('======= AUDITORIA REFINADA =======');
+  Logger.log('Total encontrados: ' + resultado.totalAfetados);
+  Logger.log('');
+  Logger.log('🔴 VÍTIMAS REAIS DO BUG (preencheram mas dados sumiram): ' + vitimas.length);
+  if (vitimas.length > 0) {
+    Logger.log(JSON.stringify(vitimas, null, 2));
+  } else {
+    Logger.log('✅ Nenhuma vítima real do bug encontrada!');
+  }
+  Logger.log('');
+  Logger.log('🟡 Fechados em massa sem ter preenchido (não são bug): ' + fechadosEmMassa.length);
+  Logger.log('==================================');
 }

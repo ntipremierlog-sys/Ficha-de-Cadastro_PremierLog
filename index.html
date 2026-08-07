@@ -529,14 +529,15 @@
 
           // Helper to draw clean sections
           const drawSectionHeader = (title) => {
-            if (y > 240 || (title.toUpperCase() === "DECLARAÇÃO FINAL" && y > 210)) {
+            const upperTitle = title.toUpperCase();
+            if (y > 240 || (upperTitle === "DECLARAÇÃO FINAL" && y > 210) || (upperTitle === "PLANO DE SAÚDE" && y > 185)) {
               doc.addPage();
               y = 15;
             }
             doc.setFont("helvetica", "bold");
             doc.setFontSize(9.5);
             doc.setTextColor(33, 21, 81); // #0B2C4A
-            doc.text(title.toUpperCase(), marginX, y);
+            doc.text(upperTitle, marginX, y);
 
             // Underline in orange
             doc.setDrawColor(212, 175, 55); // #D4AF37 (Gold)
@@ -679,7 +680,7 @@
                 const logoHeight = 8.0; // mm
                 const logoWidth = logoHeight; // Aspect ratio 1:1 (square)
                 const logoX = marginX + textWidth + 3.0;
-                doc.addImage(BRADESCO_LOGO_BASE64, 'PNG', logoX, y - 13.0, logoWidth, logoHeight);
+                doc.addImage(BRADESCO_LOGO_BASE64, 'PNG', logoX, y - 9.5, logoWidth, logoHeight);
               } catch (err) {
                 console.error("Error drawing Bradesco Saúde logo in PDF:", err);
               }
@@ -867,90 +868,96 @@
           doc.text("ASSINATURA DO FUNCIONÁRIO", marginX + printableWidth / 2, y + 4.5, { align: "center" });
 
           // Salvar o PDF localmente (download)
-          const cleanName = formData.nomeCompleto.trim().replace(/\s+/g, '_').slice(0, 30);
-          const fileName = `Ficha_Cadastro_${cleanName}.pdf`;
-          doc.save(fileName);
-
-          // ETAPA 2: Enviar dados + PDF base64 ao Google Sheets / Drive
+          // ETAPA 2: Enviar apenas dados do formulário (sem o PDF pesado) — Rápido e Seguro!
           if (token && APPS_SCRIPT_URL !== 'COLE_A_URL_DO_APPS_SCRIPT_AQUI') {
-            // Retry automático: até 3 tentativas com delay crescente
             const MAX_RETRIES = 3;
             let serverSuccess = false;
             let lastServerError = null;
 
             for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
               try {
-                const pdfBase64 = doc.output('datauristring');
+                console.log(`Tentativa ${attempt} de salvar dados textuais...`);
                 const submitResponse = await fetch(APPS_SCRIPT_URL, {
                   method: 'POST',
                   body: JSON.stringify({
                     action: 'submitForm',
                     token: token,
                     formData: formData,
-                    pdfBase64: pdfBase64
+                    pdfBase64: '' // Envia vazio para ser rápido
                   })
                 });
                 const submitResult = await submitResponse.json();
                 if (submitResult.success) {
                   serverSuccess = true;
-                  break; // sucesso — sai do loop
+                  break;
                 } else if (submitResult.error) {
                   lastServerError = submitResult.error;
-                  console.warn(`Tentativa ${attempt} — erro do servidor:`, lastServerError);
-                  // Erro de lógica (ex: formulário já preenchido) — não adianta retry
                   if (lastServerError.includes('já preenchido')) {
-                    serverSuccess = true; // considera já concluído
+                    serverSuccess = true;
                   }
-                  break;
+                  break; // Erro de lógica do servidor — não tenta novamente
                 }
               } catch (err) {
                 lastServerError = err.message || 'Erro de rede';
                 console.error(`Tentativa ${attempt} falhou:`, err);
-
-                // Tentativa de fallback leve sem o arquivo PDF em base64 (para garantir que o status vire Concluído se a rede for lenta)
-                try {
-                  console.warn('Tentando envio secundário leve sem o arquivo PDF para garantir atualização de status...');
-                  const fallbackResponse = await fetch(APPS_SCRIPT_URL, {
-                    method: 'POST',
-                    body: JSON.stringify({
-                      action: 'submitForm',
-                      token: token,
-                      formData: formData,
-                      pdfBase64: ''
-                    })
-                  });
-                  const fallbackResult = await fallbackResponse.json();
-                  if (fallbackResult.success || (fallbackResult.error && fallbackResult.error.includes('já preenchido'))) {
-                    serverSuccess = true;
-                    break;
-                  }
-                } catch (fallbackErr) {
-                  console.error('Envio secundário também falhou:', fallbackErr);
-                }
-
                 if (attempt < MAX_RETRIES) {
-                  // Aguarda antes de tentar novamente: 1.5s, depois 3s
                   await new Promise(resolve => setTimeout(resolve, attempt * 1500));
                 }
               }
             }
 
             if (!serverSuccess) {
-              // Notifica o candidato sobre a falha sem impedir o download local
+              // Também tenta salvar o PDF localmente em caso de falha de conexão, para o usuário não perder o documento
+              try {
+                const cleanName = formData.nomeCompleto.trim().replace(/\s+/g, '_').slice(0, 30);
+                const fileName = `Ficha_Cadastro_${cleanName}.pdf`;
+                doc.save(fileName);
+              } catch (pdfErr) {
+                console.error("Erro ao salvar PDF localmente:", pdfErr);
+              }
+
               const errMsg = lastServerError || 'Erro de conexão';
-              console.error('Falha definitiva ao registrar no servidor:', errMsg);
               setErrors({
-                global: `⚠️ O PDF foi gerado e baixado com sucesso, mas houve um problema ao registrar sua ficha no sistema (${errMsg}). Por favor, envie o arquivo PDF para o RH diretamente ou tente novamente clicando no botão de envio.`
+                global: `⚠️ Houve um problema ao registrar sua ficha no sistema (${errMsg}). Contudo, salvamos uma cópia do PDF em seu dispositivo. Por favor, tente enviar novamente ou encaminhe o PDF ao RH.`
               });
               setIsGenerating(false);
-              return; // Não avança para tela de sucesso — status ainda Pendente
+              return;
             }
           }
 
+          // Salvar o PDF localmente (download)
+          const cleanName = formData.nomeCompleto.trim().replace(/\s+/g, '_').slice(0, 30);
+          const fileName = `Ficha_Cadastro_${cleanName}.pdf`;
+          doc.save(fileName);
+
           setSuccessMessage('Ficha cadastral gerada com sucesso! O download do PDF iniciou automaticamente.');
-          // Se tiver token, transiciona para a tela de sucesso
+          
           if (token && APPS_SCRIPT_URL !== 'COLE_A_URL_DO_APPS_SCRIPT_AQUI') {
             setIsFormSubmitted(true);
+            
+            // ETAPA 3: Enviar o PDF em segundo plano (assíncrono/background)
+            (async () => {
+              try {
+                console.log('Enviando PDF em segundo plano...');
+                const pdfBase64 = doc.output('datauristring');
+                const uploadResponse = await fetch(APPS_SCRIPT_URL, {
+                  method: 'POST',
+                  body: JSON.stringify({
+                    action: 'uploadPDF',
+                    token: token,
+                    pdfBase64: pdfBase64
+                  })
+                });
+                const uploadResult = await uploadResponse.json();
+                if (uploadResult.success) {
+                  console.log('PDF enviado e salvo no Drive com sucesso:', uploadResult.pdfUrl);
+                } else {
+                  console.warn('Erro ao salvar PDF no Drive (segundo plano):', uploadResult.error);
+                }
+              } catch (uploadErr) {
+                console.error('Erro de conexão ao enviar PDF em segundo plano:', uploadErr);
+              }
+            })();
           }
         } catch (err) {
           console.error('Erro na geração do PDF:', err);

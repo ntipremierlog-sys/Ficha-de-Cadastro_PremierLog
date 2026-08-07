@@ -9,6 +9,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
   <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <style>
     /* ===================================================
        VARIÁVEIS & RESET
@@ -1104,6 +1105,43 @@ const ADMIN_SECRET    = 'Premier2025AdminSecret!'; // deve ser igual ao apps-scr
 const ADMIN_PASSWORD  = 'Premier@2025';            // senha de login do painel
 const FORM_BASE_URL   = 'https://ntipremierlog-sys.github.io/Ficha-de-Cadastro_PremierLog/'; // URL do formulário
 
+let LOGO_PDF_BASE64 = "";
+let BRADESCO_LOGO_BASE64 = "";
+
+async function loadLogosFromIndex() {
+  try {
+    const res = await fetch('./index.html');
+    const htmlText = await res.text();
+    
+    // Extrai LOGO_PDF_BASE64 usando indexOf de forma ultra-rápida (evita travar a CPU com RegExp)
+    const pdfKey = 'const LOGO_PDF_BASE64 = "';
+    const pdfIdx = htmlText.indexOf(pdfKey);
+    if (pdfIdx !== -1) {
+      const start = pdfIdx + pdfKey.length;
+      const end = htmlText.indexOf('"', start);
+      if (end !== -1) {
+        LOGO_PDF_BASE64 = htmlText.substring(start, end);
+      }
+    }
+    
+    // Extrai BRADESCO_LOGO_BASE64 usando indexOf
+    const bradescoKey = 'const BRADESCO_LOGO_BASE64 = "';
+    const bradescoIdx = htmlText.indexOf(bradescoKey);
+    if (bradescoIdx !== -1) {
+      const start = bradescoIdx + bradescoKey.length;
+      const end = htmlText.indexOf('"', start);
+      if (end !== -1) {
+        BRADESCO_LOGO_BASE64 = htmlText.substring(start, end);
+      }
+    }
+    
+    console.log("Logos loaded from index.html successfully!");
+  } catch (err) {
+    console.error("Failed to load logos from index.html:", err);
+  }
+}
+loadLogosFromIndex();
+
 // ============================================================
 // ESTADO
 // ============================================================
@@ -1211,8 +1249,23 @@ async function loadCandidates() {
   }
 
   try {
-    // Sincroniza em segundo plano status dos candidatos que preencheram
-    try { await apiGet({ action: 'syncStatuses' }); } catch(errSync) { console.warn('Sync em segundo plano:', errSync); }
+    // Sincroniza em segundo plano status dos candidatos (sem dar await para carregar instantaneamente)
+    apiGet({ action: 'syncStatuses' })
+      .then(res => {
+        if (res && res.updated > 0) {
+          console.log('Status sincronizados, recarregando tabela...');
+          apiGet({ action: 'getCandidates' }).then(newData => {
+            if (newData && !newData.error) {
+              state.candidates = newData.candidates || [];
+              updateStats();
+              populateFilters();
+              applyFilters();
+              renderDashboardTable();
+            }
+          });
+        }
+      })
+      .catch(errSync => console.warn('Sync em segundo plano falhou:', errSync));
 
     const data = await apiGet({ action: 'getCandidates' });
     if (data.error) { showToast('Erro: ' + data.error, 'error'); return; }
@@ -1408,6 +1461,7 @@ function actionBtns(c) {
         <option value="sendWhatsApp">💬 Enviar WhatsApp</option>
         ${isConcluido ? `<option value="viewDetails">👁️ Ver Dados</option>` : ''}
         ${isConcluido && c.pdfUrl ? `<option value="viewPdf">📄 Abrir PDF (Drive)</option>` : ''}
+        ${isConcluido ? `<option value="generateLocalPdf">📥 Baixar PDF Local</option>` : ''}
         <option value="delete" class="opt-delete">❌ Excluir Candidato</option>
       </select>
     </div>
@@ -1452,6 +1506,10 @@ function handleAction(selectEl, token, nome, pdfUrl) {
         feedbackText = "⚠️ Sem PDF";
       }
       break;
+    case 'generateLocalPdf':
+      generateCandidateLocalPDF(token, nome);
+      feedbackText = "📥 Gerando PDF...";
+      break;
     case 'delete':
       confirmDelete(token, nome);
       feedbackText = "❌ Excluindo...";
@@ -1488,6 +1546,438 @@ async function resendMail(token, nome) {
     if (data.success) showToast('✅ E-mail reenviado com sucesso!', 'success');
     else showToast('Erro: ' + (data.error || 'Falha ao enviar'), 'error');
   } catch(e) { showToast('Erro ao enviar e-mail.', 'error'); }
+}
+
+async function generateCandidateLocalPDF(token, nome) {
+  showToast('Carregando respostas do candidato...', 'info');
+  try {
+    let data;
+    if (APPS_SCRIPT_URL.includes('COLE')) {
+      showToast('⚠️ URL do Apps Script não configurada para gerar PDF.', 'warning');
+      return;
+    }
+    data = await apiGet({ action: 'getResponse', token });
+    if (data.error) {
+      showToast('Erro ao obter respostas: ' + data.error, 'error');
+      return;
+    }
+
+    const r = data.response || {};
+    
+    // Obter dados da vaga a partir do state.candidates
+    const cand = state.candidates.find(c => c.token === token);
+    const vaga = cand ? cand.vaga : '';
+    const hasHealthPlan = vaga.includes('1268') || vaga.includes('158');
+    const hasVT = !vaga.includes('618');
+
+    // Mapeamento das chaves da planilha para a estrutura do PDF
+    const formData = {
+      nomeCompleto: r.NomeCompleto || r.NomeCandidato || nome || '',
+      nomeSocial: r.NomeSocial || '',
+      cep: r.CEP || '',
+      bairroCidade: r.BairroCidade || '',
+      endereco: r.Endereço || r.Endereco || '',
+      whatsapp: r.WhatsApp || r.Whatsapp || '',
+      email: r.Email || '',
+      contatoEmergenciaNome: r.EmergenciaNome || r.EmergenciaContato || '',
+      contatoEmergenciaTelefone: r.EmergenciaTel || r.EmergenciaTelefone || '',
+      rg: r.RG || r.Rg || '',
+      cpf: r.CPF || r.Cpf || '',
+      tituloEleitor: r.TítuloEleitor || r.TituloEleitor || '',
+      grauInstrucao: r.GrauInstrução || r.GrauInstrucao || '',
+      possuiFilhos: r.PossuiFilhos || 'Não',
+      quantosFilhos: r.QtdFilhos || r.QuantosFilhos || '',
+      declararDependenteIR: r.DeclararIR || 'Não',
+      quantosDependentesIR: r.QtdDepIR || r.QuantosDependentesIR || '',
+      dependentesIR: [],
+      estadoCivil: r.EstadoCivil || 'Solteiro',
+      estadoCivilOutro: r.EstadoCivilOutro || '',
+      botaNumero: r.NúmeroBota || r.NumeroBota || '',
+      camisaTamanho: r.TamanhoCamisa || '',
+      calcaTamanho: r.TamanhoCalça || r.TamanhoCalca || '',
+      optanteVT: r.OptanteVT || 'Não',
+      planoSaudeOpcao: 'a',
+      dependente1Nome: r.Dep1Nome || '',
+      dependente1Cpf: r.Dep1CPF || r.Dep1Cpf || '',
+      dependente2Nome: r.Dep2Nome || '',
+      dependente2Cpf: r.Dep2CPF || r.Dep2Cpf || '',
+      tipoAssinatura: r.TipoAssinatura || 'texto',
+      assinaturaDigitada: r.NomeCompleto || r.NomeCandidato || nome || ''
+    };
+
+    // Parser dos dependentes de IR
+    if (r.DependentesIR && typeof r.DependentesIR === 'string' && r.DependentesIR.trim() !== '') {
+      try {
+        formData.dependentesIR = r.DependentesIR.split(' ;; ').map(part => {
+          const subparts = part.split(' | ');
+          const depNome = subparts[0] || '';
+          let depCpf = '';
+          let depParentesco = '';
+          subparts.forEach(sp => {
+            if (sp.toUpperCase().startsWith('CPF:')) {
+              depCpf = sp.substring(4).trim();
+            } else if (sp.toUpperCase().startsWith('PARENTESCO:')) {
+              depParentesco = sp.substring(11).trim();
+            }
+          });
+          return { nome: depNome, cpf: depCpf, parentesco: depParentesco };
+        });
+      } catch (errParser) {
+        console.error("Erro ao converter dependentes de IR:", errParser);
+      }
+    }
+
+    // Parser de plano de saúde
+    if (r.PlanoSaúde || r.PlanoSaude) {
+      const val = String(r.PlanoSaúde || r.PlanoSaude).trim().toLowerCase();
+      if (val === 'a' || val.includes('não tenho interesse') || val.includes('não optante')) {
+        formData.planoSaudeOpcao = 'a';
+      } else if (val === 'b' || val.includes('plano de saúde individual') || val.includes('opto pelo plano de saúde individual') || val.includes('optante individual')) {
+        formData.planoSaudeOpcao = 'b';
+      } else if (val === 'c' || val.includes('inclusão de dependente') || val.includes('optante familiar') || val.includes('opto pelo plano de saúde com inclusão')) {
+        formData.planoSaudeOpcao = 'c';
+      }
+    }
+
+    // PDF Generator using jsPDF
+    showToast('Gerando arquivo PDF local...', 'info');
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({
+      orientation: 'portrait',
+      unit: 'mm',
+      format: 'a4'
+    });
+
+    const marginX = 12;
+    const printableWidth = 186; // 210 - 24
+    let y = 10;
+
+    const drawSectionHeader = (title) => {
+      const upperTitle = title.toUpperCase();
+      if (y > 240 || (upperTitle === "DECLARAÇÃO FINAL" && y > 210) || (upperTitle === "PLANO DE SAÚDE" && y > 185)) {
+        doc.addPage();
+        y = 15;
+      }
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(9.5);
+      doc.setTextColor(33, 21, 81); // #0B2C4A
+      doc.text(upperTitle, marginX, y);
+
+      // Underline in gold
+      doc.setDrawColor(212, 175, 55); // #D4AF37 (Gold)
+      doc.setLineWidth(0.6);
+      doc.line(marginX, y + 1.2, marginX + 35, y + 1.2);
+
+      y += 5.5;
+    };
+
+    const drawField = (label, value, x, width) => {
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(7.0);
+      doc.setTextColor(33, 21, 81);
+      doc.text(label, x, y);
+
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(8.0);
+      doc.setTextColor(31, 41, 55);
+      doc.text(String(value || ''), x, y + 4.2);
+
+      doc.setDrawColor(220, 225, 230);
+      doc.setLineWidth(0.2);
+      doc.line(x, y + 5.5, x + width, y + 5.5);
+    };
+
+    // 1. Header (Logo + Company text)
+    if (LOGO_PDF_BASE64) {
+      try {
+        doc.addImage(LOGO_PDF_BASE64, 'JPEG', marginX, y, 22, 15.8);
+      } catch (err) {
+        console.error("Error drawing logo in PDF:", err);
+      }
+    }
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(14);
+    doc.setTextColor(33, 21, 81);
+    doc.text("FICHA DE CADASTRO DE ADMISSÃO", marginX + printableWidth / 2, y + 5, { align: "center" });
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(10);
+    doc.setTextColor(212, 175, 55);
+    doc.text("Premier Logistics Gestão Empresarial Ltda", marginX + printableWidth / 2, y + 10.5, { align: "center" });
+
+    y += 25.0;
+
+    // 2. DADOS PESSOAIS
+    drawSectionHeader("Dados Pessoais");
+
+    drawField("NOME COMPLETO", formData.nomeCompleto, marginX, 120);
+    drawField("NOME SOCIAL", formData.nomeSocial || 'Não informado', marginX + 124, 62);
+    y += 10.0;
+
+    drawField("ENDEREÇO RESIDENCIAL", formData.endereco, marginX, 120);
+    drawField("BAIRRO / CIDADE", formData.bairroCidade, marginX + 124, 62);
+    y += 10.0;
+
+    drawField("CEP", formData.cep, marginX, 42);
+    drawField("WHATSAPP / CELULAR", formData.whatsapp, marginX + 46, 54);
+    drawField("E-MAIL", formData.email, marginX + 104, 82);
+    y += 10.0;
+
+    drawField("CONTATO DE EMERGÊNCIA (NOME)", formData.contatoEmergenciaNome, marginX, 110);
+    drawField("TELEFONE DO CONTATO", formData.contatoEmergenciaTelefone, marginX + 114, 72);
+    y += 13.0;
+
+    // 3. DOCUMENTOS PESSOAIS
+    drawSectionHeader("Documentos Pessoais");
+
+    drawField("RG (REGISTRO GERAL)", formData.rg, marginX, 56);
+    drawField("CPF (CADASTRO DE PESSOAS FÍSICAS)", formData.cpf, marginX + 60, 56);
+    drawField("TÍTULO DE ELEITOR", formData.tituloEleitor, marginX + 120, 66);
+    y += 13.0;
+
+    // 4. ESCOLARIDADE E DEPENDENTES
+    drawSectionHeader("Escolaridade e Dependentes");
+    drawField("GRAU DE INSTRUÇÃO", formData.grauInstrucao || 'Não informado', marginX, 74);
+    drawField("FILHOS S. FAMÍLIA?", formData.possuiFilhos, marginX + 78, 42);
+    drawField("QTD (S.F.)", formData.possuiFilhos === 'Sim' ? formData.quantosFilhos : '0', marginX + 124, 16);
+    drawField("DEPENDENTE IR?", formData.declararDependenteIR || 'Não', marginX + 144, 28);
+    drawField("QTD (IR)", formData.declararDependenteIR === 'Sim' ? formData.quantosDependentesIR : '0', marginX + 176, 10);
+    y += 10.0;
+
+    doc.setFont("helvetica", "italic");
+    doc.setFontSize(6.8);
+    doc.setTextColor(110, 120, 130);
+    doc.text("Obs.: Apresentar Certidão de Nascimento e CPF dos filhos para Salário Família. Para dependentes de IR, é obrigatório CPF e comprovação de parentesco.", marginX, y);
+    y += 8.0;
+
+    if (formData.declararDependenteIR === 'Sim' && formData.dependentesIR && formData.dependentesIR.length > 0) {
+      formData.dependentesIR.forEach((dep, idx) => {
+        if (y > 270) {
+          doc.addPage();
+          y = 15;
+        }
+        drawField(`DEP. IR 0${idx + 1} - NOME`, dep.nome || 'Não informado', marginX, 100);
+        drawField("CPF", dep.cpf || 'Não informado', marginX + 104, 40);
+        drawField("PARENTESCO", dep.parentesco || 'Não informado', marginX + 148, 38);
+        y += 10.0;
+      });
+      y += 3.0;
+    }
+
+    // 5. ESTADO CIVIL E FARDAMENTO
+    drawSectionHeader("Estado Civil e Fardamento");
+
+    const estadoCivilTexto = formData.estadoCivil === 'Outros' ? `Outros (${formData.estadoCivilOutro})` : (formData.estadoCivil || 'Não informado');
+    drawField("ESTADO CIVIL", estadoCivilTexto, marginX, 76);
+    drawField("BOTA Nº (CALÇADO)", formData.botaNumero || 'N/A', marginX + 80, 32);
+    drawField("CAMISA (TAMANHO)", formData.camisaTamanho || 'N/A', marginX + 116, 32);
+    drawField("CALÇA (TAMANHO)", formData.calcaTamanho || 'N/A', marginX + 152, 34);
+    y += 13.0;
+
+    // 6. BENEFÍCIOS - VALE TRANSPORTE
+    if (hasVT) {
+      drawSectionHeader("Benefícios - Vale Transporte");
+
+      drawField("OPTANTE PELO VALE TRANSPORTE?", formData.optanteVT, marginX, printableWidth);
+      y += 10.0;
+
+      doc.setFont("helvetica", "italic");
+      doc.setFontSize(6.8);
+      doc.setTextColor(110, 120, 130);
+      doc.text("Conforme art. 9º do Decreto nº 95.247/1987, o desconto referente ao VT é de até 6% do salário base do colaborador, descontado em folha mensalmente.", marginX, y);
+      y += 12.0;
+    }
+
+    if (hasHealthPlan) {
+      // 7. PLANO DE SAÚDE
+      drawSectionHeader("Plano de Saúde");
+
+      if (BRADESCO_LOGO_BASE64) {
+        try {
+          doc.setFont("helvetica", "bold");
+          doc.setFontSize(9.5);
+          const textWidth = doc.getTextWidth("PLANO DE SAÚDE");
+          const logoHeight = 8.0;
+          const logoWidth = logoHeight;
+          const logoX = marginX + textWidth + 3.0;
+          doc.addImage(BRADESCO_LOGO_BASE64, 'PNG', logoX, y - 9.5, logoWidth, logoHeight);
+        } catch (err) {
+          console.error("Error drawing Bradesco Saúde logo in PDF:", err);
+        }
+      }
+
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(7.5);
+      doc.setTextColor(33, 21, 81);
+      doc.text("Bradesco Saúde Nacional III Q CE R3 A | Plano: TN3W | ANS: 502643251 | Copart. | Quarto Privativo | Área: Nacional | Salvador-BA", marginX, y);
+      y += 4.5;
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(7.5);
+      doc.setTextColor(33, 21, 81);
+      doc.text("Acomodação: Ambulatorial + Hospitalar com Obstetrícia | Rede: Nacional III | Contratação: Coletivo Empresarial | Kit: Digital", marginX, y);
+      y += 4.5;
+
+      doc.setFont("helvetica", "italic");
+      doc.setFontSize(6.5);
+      doc.setTextColor(110, 120, 130);
+      const healthDetailText = "A mensalidade é assumida parcialmente pelo funcionário: 50% do valor da tabela conforme faixa etária, descontado em folha de pagamento. Em caso de inclusão de dependentes, o plano é custeado integralmente pelo titular. Reajustes anuais de mensalidade e coparticipação são repassados ao funcionário.";
+      const splitHealthText = doc.splitTextToSize(healthDetailText, printableWidth);
+      doc.text(splitHealthText, marginX, y);
+      y += splitHealthText.length * 3.0 + 3.0;
+
+      // Rates table
+      const tableStartY = y;
+      const colW = 18.6;
+
+      doc.setFillColor(33, 21, 81);
+      doc.rect(marginX, tableStartY, printableWidth, 5.0, "F");
+
+      const ageHeaders = ["0 a 18", "19 a 23", "24 a 28", "29 a 33", "34 a 38", "39 a 43", "44 a 48", "49 a 53", "54 a 58", "59+"];
+      const agePrices = ["R$ 614,17", "R$ 724,72", "R$ 876,91", "R$ 1.052,30", "R$ 1.199,61", "R$ 1.235,60", "R$ 1.504,42", "R$ 1.769,50", "R$ 2.105,70", "R$ 3.684,77"];
+
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(6.2);
+      doc.setTextColor(255, 255, 255);
+      for (let i = 0; i < 10; i++) {
+        doc.text(ageHeaders[i], marginX + i * colW + colW / 2, tableStartY + 3.5, { align: "center" });
+      }
+
+      doc.setFillColor(245, 247, 250);
+      doc.rect(marginX, tableStartY + 5.0, printableWidth, 5.0, "F");
+
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(5.8);
+      doc.setTextColor(51, 65, 85);
+      for (let i = 0; i < 10; i++) {
+        doc.text(agePrices[i], marginX + i * colW + colW / 2, tableStartY + 5.0 + 3.5, { align: "center" });
+      }
+
+      doc.setDrawColor(180, 190, 200);
+      doc.setLineWidth(0.15);
+      doc.rect(marginX, tableStartY, printableWidth, 10.0);
+      doc.line(marginX, tableStartY + 5.0, marginX + printableWidth, tableStartY + 5.0);
+      for (let i = 1; i < 10; i++) {
+        doc.line(marginX + i * colW, tableStartY, marginX + i * colW, tableStartY + 10.0);
+      }
+
+      y += 15.0;
+
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(7.0);
+      doc.setTextColor(33, 21, 81);
+      doc.text("OPÇÃO ASSINALADA:", marginX, y);
+      y += 4.5;
+
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(7.2);
+      doc.setTextColor(31, 41, 55);
+
+      let optionText = '';
+      if (formData.planoSaudeOpcao === 'a') {
+        optionText = "[ X ] Não tenho interesse no plano de saúde.";
+      } else if (formData.planoSaudeOpcao === 'b') {
+        optionText = "[ X ] Opto pelo plano de saúde individual, e autorizo o empregador a descontar mensalmente em folha de pagamento os valores de mensalidade e coparticipação.";
+      } else {
+        optionText = "[ X ] Opto pelo plano de saúde com inclusão de dependente(s), e autorizo o empregador a descontar mensalmente em folha de pagamento os valores correspondentes de mensalidade e coparticipação.";
+      }
+
+      const splitOptText = doc.splitTextToSize(optionText, printableWidth);
+      doc.text(splitOptText, marginX, y);
+      y += splitOptText.length * 3.5 + 3.0;
+
+      if (formData.planoSaudeOpcao === 'c') {
+        drawField("DEPENDENTE 01 (NOME)", formData.dependente1Nome || 'Não informado', marginX, 100);
+        drawField("CPF DO DEPENDENTE 01", formData.dependente1Cpf || 'Não informado', marginX + 104, 82);
+        y += 10.0;
+
+        drawField("DEPENDENTE 02 (NOME)", formData.dependente2Nome || 'Não informado', marginX, 100);
+        drawField("CPF DO DEPENDENTE 02", formData.dependente2Cpf || 'Não informado', marginX + 104, 82);
+        y += 13.0;
+      } else {
+        y += 3.0;
+      }
+    }
+
+    // 8. DECLARAÇÃO FINAL
+    drawSectionHeader("Declaração Final");
+
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(7.2);
+    doc.setTextColor(31, 41, 55);
+    const declText = "Declaro que as informações acima são verdadeiras e autorizo os descontos em folha de pagamento conforme indicado nesta ficha, nos termos da legislação trabalhista vigente (CLT).";
+    const splitDecl = doc.splitTextToSize(declText, printableWidth);
+    doc.text(splitDecl, marginX, y);
+    y += splitDecl.length * 3.5 + 15.0;
+
+    // Date
+    const months = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"];
+    const today = new Date();
+    const formattedDate = `Salvador, ${today.getDate()} de ${months[today.getMonth()]} de ${today.getFullYear()}`;
+
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8.5);
+    doc.setTextColor(31, 41, 55);
+    doc.text(formattedDate, marginX + printableWidth / 2, y, { align: "center" });
+
+    y += 15.0;
+
+    // Simulated handwritten cursive signature using Canvas + EB Garamond font fallback
+    if (formData.assinaturaDigitada && formData.assinaturaDigitada.trim() !== '') {
+      try {
+        const sigCanvas = document.createElement("canvas");
+        sigCanvas.width = 480;
+        sigCanvas.height = 120;
+        const sigCtx = sigCanvas.getContext("2d");
+        sigCtx.clearRect(0, 0, sigCanvas.width, sigCanvas.height);
+        
+        let fontSize = 38;
+        sigCtx.font = `italic bold ${fontSize}px 'EB Garamond', Garamond, Georgia, serif`;
+        let sigTextWidth = sigCtx.measureText(formData.assinaturaDigitada).width;
+        while (sigTextWidth > sigCanvas.width - 20 && fontSize > 16) {
+          fontSize -= 2;
+          sigCtx.font = `italic bold ${fontSize}px 'EB Garamond', Garamond, Georgia, serif`;
+          sigTextWidth = sigCtx.measureText(formData.assinaturaDigitada).width;
+        }
+
+        sigCtx.fillStyle = "#211551";
+        sigCtx.textAlign = "center";
+        sigCtx.textBaseline = "middle";
+        sigCtx.fillText(formData.assinaturaDigitada, sigCanvas.width / 2, sigCanvas.height / 2);
+
+        const sigImgData = sigCanvas.toDataURL("image/png");
+        const sigWidth = 50;
+        const sigHeight = 12.5;
+        const sigX = marginX + (printableWidth - sigWidth) / 2;
+        
+        doc.addImage(sigImgData, 'PNG', sigX, y - sigHeight - 0.5, sigWidth, sigHeight);
+      } catch (sigErr) {
+        console.error("Erro ao gerar assinatura digital no PDF:", sigErr);
+      }
+    }
+
+    // Line for signature
+    doc.setDrawColor(71, 85, 105);
+    doc.setLineWidth(0.4);
+    const sigLineWidth = 90;
+    const sigLineX = marginX + (printableWidth - sigLineWidth) / 2;
+    doc.line(sigLineX, y, sigLineX + sigLineWidth, y);
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(7.5);
+    doc.setTextColor(33, 21, 81);
+    doc.text("ASSINATURA DO FUNCIONÁRIO" + (formData.tipoAssinatura === 'desenho' ? " (ASSINADO NA TELA)" : " (ASSINATURA DIGITAL)"), marginX + printableWidth / 2, y + 4.5, { align: "center" });
+
+    // Download PDF locally in the browser
+    const cleanName = formData.nomeCompleto.trim().replace(/\s+/g, '_').slice(0, 30);
+    const fileName = `Ficha_Cadastro_${cleanName}.pdf`;
+    doc.save(fileName);
+    
+    showToast('✅ PDF baixado com sucesso!', 'success');
+  } catch(e) {
+    console.error('Erro na geração do PDF local:', e);
+    showToast('Erro ao gerar o PDF local: ' + e.message, 'error');
+  }
 }
 
 async function viewDetails(token, nome) {
