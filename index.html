@@ -206,7 +206,10 @@
         dependente2Cpf: '',
         assinaturaDigitada: '',
         tipoAssinatura: 'texto',
-        declaracaoAceite: false
+        declaracaoAceite: false,
+        pcdDeclaracao: '',
+        necessitaRecursoAcessibilidade: '',
+        recursoAcessibilidadeDescricao: ''
       });
 
       const [errors, setErrors] = useState({});
@@ -609,6 +612,17 @@
 
           drawField("CONTATO DE EMERGÊNCIA (NOME)", formData.contatoEmergenciaNome, marginX, 110);
           drawField("TELEFONE DO CONTATO", formData.contatoEmergenciaTelefone, marginX + 114, 72);
+          y += 13.0;
+
+          // 2.5 ACESSIBILIDADE E INCLUSÃO
+          drawSectionHeader("Informações de Acessibilidade e Inclusão");
+          drawField("PESSOA COM DEFICIÊNCIA (PcD)", formData.pcdDeclaracao || 'Não informado', marginX, 62);
+          if (formData.pcdDeclaracao === 'Sim') {
+            drawField("NECESSITA RECURSO DE ACESSIBILIDADE", formData.necessitaRecursoAcessibilidade || 'Não informado', marginX + 66, 56);
+            if (formData.necessitaRecursoAcessibilidade === 'Sim') {
+              drawField("RECURSO NECESSÁRIO", formData.recursoAcessibilidadeDescricao || 'Não informado', marginX + 126, 60);
+            }
+          }
           y += 13.0;
 
           // 3. DOCUMENTOS PESSOAIS
@@ -1250,10 +1264,102 @@
               </div>
             </div>
 
-            {/* SECTION 2: DOCUMENTOS PESSOAIS */}
+            {/* SECTION 2: INFORMAÇÕES DE ACESSIBILIDADE E INCLUSÃO */}
             <div className="space-y-6">
               <div className="flex items-center gap-3 border-b border-slate-100 pb-3">
                 <div className="w-8 h-8 rounded-lg bg-premier-blue/10 flex items-center justify-center text-premier-blue font-bold text-sm">02</div>
+                <h2 className="text-lg font-bold text-premier-blue">Informações de Acessibilidade e Inclusão</h2>
+              </div>
+
+              <div className="space-y-6">
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Você se declara Pessoa com Deficiência (PcD)? *</label>
+                  <div className="flex flex-wrap gap-3">
+                    {['Sim', 'Não', 'Prefiro não informar'].map(opt => (
+                      <label key={opt} className={`flex items-center gap-2 px-4 py-2.5 rounded-xl border-2 cursor-pointer transition-all duration-200 text-sm font-medium ${
+                        formData.pcdDeclaracao === opt
+                          ? 'border-premier-blue bg-premier-blue/5 text-premier-blue shadow-sm'
+                          : 'border-slate-200 hover:border-slate-300 text-slate-600'
+                      }`}>
+                        <input
+                          type="radio"
+                          name="pcdDeclaracao"
+                          value={opt}
+                          checked={formData.pcdDeclaracao === opt}
+                          onChange={(e) => handleInputChange('pcdDeclaracao', e.target.value)}
+                          className="sr-only"
+                        />
+                        <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center transition-all ${
+                          formData.pcdDeclaracao === opt
+                            ? 'border-premier-blue'
+                            : 'border-slate-300'
+                        }`}>
+                          {formData.pcdDeclaracao === opt && <div className="w-2 h-2 rounded-full bg-premier-blue"></div>}
+                        </div>
+                        {opt}
+                      </label>
+                    ))}
+                  </div>
+                </div>
+
+                {formData.pcdDeclaracao === 'Sim' && (
+                  <div className="space-y-4 pl-1 border-l-2 border-premier-blue/20 ml-2 py-2">
+                    <div>
+                      <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 pl-4">Necessita de algum recurso de acessibilidade ou adaptação razoável?</label>
+                      <div className="flex flex-wrap gap-3 pl-4">
+                        {['Não', 'Sim'].map(opt => (
+                          <label key={opt} className={`flex items-center gap-2 px-4 py-2.5 rounded-xl border-2 cursor-pointer transition-all duration-200 text-sm font-medium ${
+                            formData.necessitaRecursoAcessibilidade === opt
+                              ? 'border-premier-blue bg-premier-blue/5 text-premier-blue shadow-sm'
+                              : 'border-slate-200 hover:border-slate-300 text-slate-600'
+                          }`}>
+                            <input
+                              type="radio"
+                              name="necessitaRecursoAcessibilidade"
+                              value={opt}
+                              checked={formData.necessitaRecursoAcessibilidade === opt}
+                              onChange={(e) => handleInputChange('necessitaRecursoAcessibilidade', e.target.value)}
+                              className="sr-only"
+                            />
+                            <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center transition-all ${
+                              formData.necessitaRecursoAcessibilidade === opt
+                                ? 'border-premier-blue'
+                                : 'border-slate-300'
+                            }`}>
+                              {formData.necessitaRecursoAcessibilidade === opt && <div className="w-2 h-2 rounded-full bg-premier-blue"></div>}
+                            </div>
+                            {opt}
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+
+                    {formData.necessitaRecursoAcessibilidade === 'Sim' && (
+                      <div className="pl-4">
+                        <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Se sim, qual?</label>
+                        <input
+                          type="text"
+                          value={formData.recursoAcessibilidadeDescricao}
+                          onChange={(e) => handleInputChange('recursoAcessibilidadeDescricao', e.target.value)}
+                          placeholder="Descreva o recurso de acessibilidade necessário"
+                          className="w-full"
+                        />
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                <div className="bg-slate-50 border border-slate-200/60 rounded-2xl p-4 text-xs leading-relaxed text-slate-500 italic">
+                  <span className="font-bold text-premier-blue not-italic block mb-0.5">Observação:</span>
+                  A informação acima é solicitada exclusivamente para fins de inclusão, acessibilidade e atendimento às obrigações legais aplicáveis, não constituindo critério discriminatório ou de exclusão.
+                </div>
+              </div>
+            </div>
+
+            {/* SECTION 3: DOCUMENTOS PESSOAIS */}
+            <div className="space-y-6">
+              <div className="flex items-center gap-3 border-b border-slate-100 pb-3">
+                <div className="w-8 h-8 rounded-lg bg-premier-blue/10 flex items-center justify-center text-premier-blue font-bold text-sm">03</div>
                 <h2 className="text-lg font-bold text-premier-blue">Documentos Pessoais</h2>
               </div>
 
@@ -1295,10 +1401,10 @@
               </div>
             </div>
 
-            {/* SECTION 3: ESCOLARIDADE E DEPENDENTES */}
+            {/* SECTION 4: ESCOLARIDADE E DEPENDENTES */}
             <div className="space-y-6">
               <div className="flex items-center gap-3 border-b border-slate-100 pb-3">
-                <div className="w-8 h-8 rounded-lg bg-premier-blue/10 flex items-center justify-center text-premier-blue font-bold text-sm">03</div>
+                <div className="w-8 h-8 rounded-lg bg-premier-blue/10 flex items-center justify-center text-premier-blue font-bold text-sm">04</div>
                 <h2 className="text-lg font-bold text-premier-blue">Escolaridade e Dependentes</h2>
               </div>
 
@@ -1524,10 +1630,10 @@
               </div>
             </div>
 
-            {/* SECTION 4: ESTADO CIVIL E FARDAMENTO */}
+            {/* SECTION 5: ESTADO CIVIL E FARDAMENTO */}
             <div className="space-y-6">
               <div className="flex items-center gap-3 border-b border-slate-100 pb-3">
-                <div className="w-8 h-8 rounded-lg bg-premier-blue/10 flex items-center justify-center text-premier-blue font-bold text-sm">04</div>
+                <div className="w-8 h-8 rounded-lg bg-premier-blue/10 flex items-center justify-center text-premier-blue font-bold text-sm">05</div>
                 <h2 className="text-lg font-bold text-premier-blue">Estado Civil e Fardamento</h2>
               </div>
 
@@ -1598,11 +1704,11 @@
               </div>
             </div>
 
-            {/* SECTION 5: BENEFÍCIOS - VALE TRANSPORTE */}
+            {/* SECTION 6: BENEFÍCIOS - VALE TRANSPORTE */}
             {hasVT ? (
             <div className="space-y-6">
               <div className="flex items-center gap-3 border-b border-slate-100 pb-3">
-                <div className="w-8 h-8 rounded-lg bg-premier-blue/10 flex items-center justify-center text-premier-blue font-bold text-sm">05</div>
+                <div className="w-8 h-8 rounded-lg bg-premier-blue/10 flex items-center justify-center text-premier-blue font-bold text-sm">06</div>
                 <h2 className="text-lg font-bold text-premier-blue">Benefícios — Vale Transporte (VT)</h2>
               </div>
 
@@ -1664,11 +1770,11 @@
             </div>
             ) : null}
 
-            {/* SECTION 6: PLANO DE SAÚDE - BRADESCO SAÚDE */}
+            {/* SECTION 7: PLANO DE SAÚDE - BRADESCO SAÚDE */}
             {hasHealthPlan && (
               <div className="space-y-6">
                 <div className="flex items-center gap-3 border-b border-slate-100 pb-3">
-                <div className="w-8 h-8 rounded-lg bg-premier-blue/10 flex items-center justify-center text-premier-blue font-bold text-sm">{hasVT ? '06' : '05'}</div>
+                <div className="w-8 h-8 rounded-lg bg-premier-blue/10 flex items-center justify-center text-premier-blue font-bold text-sm">{hasVT ? '07' : '06'}</div>
                 <h2 className="text-lg font-bold text-premier-blue">Plano de Saúde</h2>
                 <img
                   id="bradescoSaudeLogoImg"
@@ -1844,10 +1950,10 @@
             </div>
             )}
 
-            {/* SECTION 7: DECLARAÇÃO FINAL */}
+            {/* SECTION 8: DECLARAÇÃO FINAL */}
             <div className="space-y-6">
               <div className="flex items-center gap-3 border-b border-slate-100 pb-3">
-                <div className="w-8 h-8 rounded-lg bg-premier-blue/10 flex items-center justify-center text-premier-blue font-bold text-sm">{hasHealthPlan && hasVT ? '07' : (!hasHealthPlan && !hasVT) ? '05' : '06'}</div>
+                <div className="w-8 h-8 rounded-lg bg-premier-blue/10 flex items-center justify-center text-premier-blue font-bold text-sm">{hasHealthPlan && hasVT ? '08' : (!hasHealthPlan && !hasVT) ? '06' : '07'}</div>
                 <h2 className="text-lg font-bold text-premier-blue">Declaração Final</h2>
               </div>
 
