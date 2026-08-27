@@ -990,16 +990,17 @@
                 <thead>
                   <tr>
                     <th>CANDIDATO</th>
-                    <th>VAGA / UNIDADE</th>
+                    <th>FUNÇÃO</th>
+                    <th>UNIDADE</th>
                     <th>STATUS</th>
                     <th>DATA DE ENVIO</th>
                     <th>AÇÕES</th>
                   </tr>
                 </thead>
                 <tbody id="recentTableBody">
-                  <tr class="skeleton-row"><td><div style="width:160px"></div></td><td><div style="width:120px"></div></td><td><div style="width:80px"></div></td><td><div style="width:100px"></div></td><td><div style="width:120px"></div></td></tr>
-                  <tr class="skeleton-row"><td><div style="width:140px"></div></td><td><div style="width:100px"></div></td><td><div style="width:80px"></div></td><td><div style="width:100px"></div></td><td><div style="width:120px"></div></td></tr>
-                  <tr class="skeleton-row"><td><div style="width:180px"></div></td><td><div style="width:130px"></div></td><td><div style="width:80px"></div></td><td><div style="width:100px"></div></td><td><div style="width:120px"></div></td></tr>
+                  <tr class="skeleton-row"><td><div style="width:160px"></div></td><td><div style="width:110px"></div></td><td><div style="width:100px"></div></td><td><div style="width:80px"></div></td><td><div style="width:100px"></div></td><td><div style="width:120px"></div></td></tr>
+                  <tr class="skeleton-row"><td><div style="width:140px"></div></td><td><div style="width:100px"></div></td><td><div style="width:100px"></div></td><td><div style="width:80px"></div></td><td><div style="width:100px"></div></td><td><div style="width:120px"></div></td></tr>
+                  <tr class="skeleton-row"><td><div style="width:180px"></div></td><td><div style="width:120px"></div></td><td><div style="width:100px"></div></td><td><div style="width:80px"></div></td><td><div style="width:100px"></div></td><td><div style="width:120px"></div></td></tr>
                 </tbody>
               </table>
             </div>
@@ -1041,7 +1042,8 @@
                 <thead>
                   <tr>
                     <th>CANDIDATO</th>
-                    <th>VAGA / UNIDADE</th>
+                    <th>FUNÇÃO</th>
+                    <th>UNIDADE</th>
                     <th>STATUS</th>
                     <th>ENVIADO EM</th>
                     <th>PREENCHIDO EM</th>
@@ -1049,7 +1051,7 @@
                   </tr>
                 </thead>
                 <tbody id="candidatesTableBody">
-                  <tr class="skeleton-row"><td><div style="width:160px"></div></td><td><div style="width:100px"></div></td><td><div style="width:80px"></div></td><td><div style="width:100px"></div></td><td><div style="width:100px"></div></td><td><div style="width:160px"></div></td></tr>
+                  <tr class="skeleton-row"><td><div style="width:160px"></div></td><td><div style="width:100px"></div></td><td><div style="width:90px"></div></td><td><div style="width:80px"></div></td><td><div style="width:100px"></div></td><td><div style="width:100px"></div></td><td><div style="width:160px"></div></td></tr>
                 </tbody>
               </table>
             </div>
@@ -1766,7 +1768,7 @@ function renderRecentTable() {
   if (!tbody) return;
   const list  = state.candidates.slice(0, 15);
   if (!list.length) { 
-    tbody.innerHTML = '<tr><td colspan="5"><div class="empty-state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="23" y1="11" x2="17" y2="11"/><line x1="20" y1="8" x2="20" y2="14"/></svg><h4>Nenhum candidato ainda</h4><p>Clique em "Novo Candidato" para começar.</p></div></td></tr>'; 
+    tbody.innerHTML = '<tr><td colspan="6"><div class="empty-state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="23" y1="11" x2="17" y2="11"/><line x1="20" y1="8" x2="20" y2="14"/></svg><h4>Nenhum candidato ainda</h4><p>Clique em "Novo Candidato" para começar.</p></div></td></tr>'; 
     return; 
   }
   tbody.innerHTML = list.map(c => {
@@ -1784,12 +1786,8 @@ function renderRecentTable() {
           </div>
         </div>
       </td>
-      <td>
-        <div class="td-vaga-wrap">
-          <span class="td-funcao">${esc(funcao || 'N/A')}</span>
-          ${getContractBadgeHtml(contrato)}
-        </div>
-      </td>
+      <td><span class="td-funcao">${esc(funcao || 'N/A')}</span></td>
+      <td>${getContractBadgeHtml(contrato) || '<span style="color:var(--text-3)">—</span>'}</td>
       <td>${statusBadge(c.status)}</td>
       <td class="td-date">${formatDisplayDate(c.dataEnvio)}</td>
       <td class="td-actions">${actionBtns(c)}</td>
@@ -1800,7 +1798,7 @@ function renderRecentTable() {
 function renderCandidatesTable() {
   const tbody = document.getElementById('candidatesTableBody');
   const list  = state.filtered;
-  if (!list.length) { tbody.innerHTML = '<tr><td colspan="6"><div class="empty-state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg><h4>Nenhum resultado</h4><p>Tente outros filtros de busca.</p></div></td></tr>'; return; }
+  if (!list.length) { tbody.innerHTML = '<tr><td colspan="7"><div class="empty-state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg><h4>Nenhum resultado</h4><p>Tente outros filtros de busca.</p></div></td></tr>'; return; }
   tbody.innerHTML = list.map(c => {
     const { funcao, contrato } = extractVagaParts(c.vaga);
     return `
@@ -1816,12 +1814,8 @@ function renderCandidatesTable() {
           </div>
         </div>
       </td>
-      <td>
-        <div class="td-vaga-wrap">
-          <span class="td-funcao">${esc(funcao || 'N/A')}</span>
-          ${getContractBadgeHtml(contrato)}
-        </div>
-      </td>
+      <td><span class="td-funcao">${esc(funcao || 'N/A')}</span></td>
+      <td>${getContractBadgeHtml(contrato) || '<span style="color:var(--text-3)">—</span>'}</td>
       <td>${statusBadge(c.status)}</td>
       <td class="td-date">${formatDisplayDate(c.dataEnvio)}</td>
       <td class="td-date">${formatDisplayDate(c.dataPreenchimento)}</td>
