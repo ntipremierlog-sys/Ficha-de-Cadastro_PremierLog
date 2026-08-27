@@ -13,6 +13,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
   <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
   <style>
     /* ===================================================
        VARIÁVEIS & RESET
@@ -282,21 +283,25 @@
     }
     .topbar-left h3 { font-size: 17px; font-weight: 700; color: var(--text); letter-spacing: -.2px; }
     .topbar-left p { font-size: 12px; color: var(--text-3); margin-top: 2px; }
-    .topbar-right { display: flex; align-items: center; gap: 10px; }
+    .topbar-right { display: flex; align-items: center; gap: 12px; flex-shrink: 0; }
     .topbar-badge {
-      display: flex; align-items: center; gap: 6px;
-      padding: 6px 12px; border-radius: 20px;
-      background: rgba(33,21,81,.06); border: 1px solid rgba(33,21,81,.1);
-      font-size: 11.5px; font-weight: 600; color: var(--navy);
+      display: inline-flex; align-items: center; gap: 7px;
+      padding: 6px 14px; border-radius: 20px;
+      background: rgba(16,185,129,.08); border: 1px solid rgba(16,185,129,.2);
+      font-size: 12px; font-weight: 600; color: #047857;
+      white-space: nowrap;
     }
-    .topbar-badge span { width: 6px; height: 6px; border-radius: 50%; background: #10b981; animation: pulse 2s ease-in-out infinite; }
+    .topbar-badge .status-dot { width: 7px; height: 7px; border-radius: 50%; background: #10b981; animation: pulse 2s ease-in-out infinite; flex-shrink: 0; }
     @keyframes pulse { 0%,100%{opacity:1;} 50%{opacity:.4;} }
+    .topbar-sync-time {
+      color: var(--text-3); font-size: 11.5px; font-weight: 500; margin-left: 2px;
+    }
     .btn-refresh {
       width: 36px; height: 36px; border-radius: 10px;
       background: var(--bg); color: var(--text-2);
       display: flex; align-items: center; justify-content: center;
       font-size: 16px; transition: all .18s;
-      border: 1px solid var(--border);
+      border: 1px solid var(--border); flex-shrink: 0;
     }
     .btn-refresh:hover { background: var(--border); color: var(--navy); }
     .btn-refresh.spinning svg { animation: spin .8s linear infinite; }
@@ -404,28 +409,44 @@
       letter-spacing: .8px; color: var(--text-2);
     }
     .stat-value {
-      font-size: 36px; font-weight: 800; color: var(--text);
+      font-size: 34px; font-weight: 800; color: var(--text);
       line-height: 1.1; letter-spacing: -1px;
-      margin-bottom: 4px;
+      margin-bottom: 2px;
     }
     .stat-card.total   .stat-value { color: var(--navy); }
     .stat-card.pending .stat-value { color: var(--warning); }
     .stat-card.done    .stat-value { color: var(--success); }
     .stat-card.rate    .stat-value { color: var(--gold); }
-    .stat-sub { font-size: 11.5px; color: var(--text-3); font-weight: 500; }
+    .stat-sub { font-size: 12px; color: var(--text-3); font-weight: 500; }
 
-    /* Progress bar on stat cards */
-    .stat-progress-wrap {
-      width: 100%; height: 5px; background: rgba(0,0,0,0.05);
-      border-radius: 999px; margin-top: 10px; overflow: hidden;
+    /* ===================================================
+       DASHBOARD — GRÁFICOS & ACOMPANHAMENTO
+    =================================================== */
+    .dashboard-charts-grid {
+      display: grid; grid-template-columns: 2fr 1fr;
+      gap: 20px; margin-bottom: 24px;
     }
-    .stat-progress-bar {
-      height: 100%; border-radius: 999px; transition: width 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+    .chart-card {
+      background: white; border-radius: var(--radius);
+      box-shadow: var(--shadow); border: 1px solid var(--border);
+      padding: 20px 22px; display: flex; flex-direction: column;
     }
-    .stat-progress-bar.navy    { background: var(--navy); }
-    .stat-progress-bar.warning { background: var(--warning); }
-    .stat-progress-bar.success { background: var(--success); }
-    .stat-progress-bar.gold    { background: linear-gradient(90deg, var(--gold), var(--orange-dk)); }
+    .chart-card-header {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 16px;
+    }
+    .chart-card-title {
+      font-size: 14.5px; font-weight: 700; color: var(--navy);
+      display: flex; align-items: center; gap: 8px;
+    }
+    .chart-card-title svg { width: 17px; height: 17px; color: var(--navy-light); }
+    .chart-card-badge {
+      font-size: 11px; font-weight: 600; padding: 3px 8px;
+      border-radius: 6px; background: rgba(33,21,81,.06); color: var(--navy);
+    }
+    .chart-container-wrap {
+      position: relative; flex: 1; min-height: 220px; width: 100%;
+    }
 
     /* ===================================================
        CANDIDATOS — PAINEL & FILTROS
@@ -822,9 +843,13 @@
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="9"/><rect x="14" y="3" width="7" height="5"/><rect x="14" y="12" width="7" height="9"/><rect x="3" y="16" width="7" height="5"/></svg>
           Dashboard
         </div>
+        <div class="nav-item" onclick="scrollToRecentCandidates()" id="nav-recent">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+          Candidatos Recentes
+        </div>
         <div class="nav-item" onclick="setView('candidates')" id="nav-candidates">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-          Candidatos
+          Todos Candidatos
           <span id="sidebarBadge" style="margin-left:auto;background:rgba(212,175,55,.25);color:#D4AF37;font-size:11px;font-weight:700;padding:2px 8px;border-radius:10px;display:none;"></span>
         </div>
       </nav>
@@ -832,7 +857,7 @@
         <div class="sidebar-user-card">
           <div class="sidebar-user-avatar">RH</div>
           <div class="sidebar-user-info">
-            <p>Recursos Humanos</p>
+            <p>RH e R&S</p>
             <span>Premier Logistics</span>
           </div>
         </div>
@@ -852,9 +877,9 @@
         </div>
         <div class="topbar-right">
           <div class="topbar-badge" title="Status de conexão com a base de dados">
-            <span></span>
+            <span class="status-dot"></span>
             <span id="topbarSyncStatus">Sistema Ativo</span>
-            <span style="color:var(--text-3);font-weight:400;margin-left:4px;" id="topbarSyncTime">• Sincronizado</span>
+            <span class="topbar-sync-time" id="topbarSyncTime">• Sincronizado</span>
           </div>
           <button class="btn-refresh" id="btnRefresh" onclick="loadCandidates()" title="Atualizar dados e sincronizar status">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.88"/></svg>
@@ -884,9 +909,6 @@
               </div>
               <div class="stat-value" id="statTotal">—</div>
               <div class="stat-sub">cadastrados no sistema</div>
-              <div class="stat-progress-wrap">
-                <div class="stat-progress-bar navy" style="width: 100%;"></div>
-              </div>
             </div>
 
             <div class="stat-card pending clickable" onclick="filterByStatus('Pendente')" title="Clique para filtrar pendentes">
@@ -899,9 +921,6 @@
               </div>
               <div class="stat-value" id="statPending">—</div>
               <div class="stat-sub">aguardando preenchimento</div>
-              <div class="stat-progress-wrap">
-                <div class="stat-progress-bar warning" id="statProgressPending" style="width: 0%;"></div>
-              </div>
             </div>
 
             <div class="stat-card done clickable" onclick="filterByStatus('Concluído')" title="Clique para filtrar concluídos">
@@ -914,9 +933,6 @@
               </div>
               <div class="stat-value" id="statDone">—</div>
               <div class="stat-sub">formulários recebidos</div>
-              <div class="stat-progress-wrap">
-                <div class="stat-progress-bar success" id="statProgressDone" style="width: 0%;"></div>
-              </div>
             </div>
 
             <div class="stat-card rate">
@@ -928,13 +944,39 @@
               </div>
               <div class="stat-value" id="statRate">—</div>
               <div class="stat-sub">do total enviado</div>
-              <div class="stat-progress-wrap">
-                <div class="stat-progress-bar gold" id="statProgressRate" style="width: 0%;"></div>
+            </div>
+          </div>
+
+          <!-- GRÁFICOS DE ACOMPANHAMENTO -->
+          <div class="dashboard-charts-grid">
+            <div class="chart-card">
+              <div class="chart-card-header">
+                <div class="chart-card-title">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+                  Volume de Candidatos por Unidade / Contrato
+                </div>
+                <span class="chart-card-badge">Distribuição Operacional</span>
+              </div>
+              <div class="chart-container-wrap">
+                <canvas id="chartUnits"></canvas>
+              </div>
+            </div>
+
+            <div class="chart-card">
+              <div class="chart-card-header">
+                <div class="chart-card-title">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 2a10 10 0 0 1 10 10"/></svg>
+                  Status de Adesão
+                </div>
+                <span class="chart-card-badge">Geral</span>
+              </div>
+              <div class="chart-container-wrap">
+                <canvas id="chartStatus"></canvas>
               </div>
             </div>
           </div>
 
-          <div class="panel">
+          <div class="panel" id="sectionRecentCandidates">
             <div class="panel-header">
               <span class="panel-title">Candidatos Recentes</span>
               <button class="btn-primary" style="font-size:12.5px;padding:7px 14px;" onclick="setView('candidates')">Ver todos →</button>
@@ -1374,8 +1416,98 @@ async function loadCandidates() {
 }
 
 // ============================================================
-// STATS & DESIGN HELPERS
+// STATS, GRÁFICOS & DESIGN HELPERS
 // ============================================================
+let chartUnitsInstance = null;
+let chartStatusInstance = null;
+
+function renderDashboardCharts() {
+  if (typeof Chart === 'undefined') return;
+
+  const total = state.candidates.length;
+  const done = state.candidates.filter(c => c.status === 'Concluído').length;
+  const pending = total - done;
+
+  // 1. Gráfico de Status (Doughnut)
+  const ctxStatus = document.getElementById('chartStatus');
+  if (ctxStatus) {
+    if (chartStatusInstance) chartStatusInstance.destroy();
+    chartStatusInstance = new Chart(ctxStatus, {
+      type: 'doughnut',
+      data: {
+        labels: ['Concluídos', 'Pendentes'],
+        datasets: [{
+          data: [done, pending],
+          backgroundColor: ['#10b981', '#f59e0b'],
+          borderColor: '#ffffff',
+          borderWidth: 2,
+          hoverOffset: 4
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        cutout: '70%',
+        plugins: {
+          legend: {
+            position: 'bottom',
+            labels: { boxWidth: 12, font: { family: 'Inter', size: 11.5, weight: '600' }, color: '#475569' }
+          }
+        }
+      }
+    });
+  }
+
+  // 2. Gráfico por Unidade / Contrato (Barra Horizontal)
+  const unitCounts = {};
+  state.candidates.forEach(c => {
+    const { contrato } = extractVagaParts(c.vaga);
+    const unitName = contrato || 'Outras / Geral';
+    unitCounts[unitName] = (unitCounts[unitName] || 0) + 1;
+  });
+
+  const sortedUnits = Object.entries(unitCounts).sort((a, b) => b[1] - a[1]).slice(0, 6);
+  const labels = sortedUnits.map(u => u[0]);
+  const data = sortedUnits.map(u => u[1]);
+
+  const ctxUnits = document.getElementById('chartUnits');
+  if (ctxUnits) {
+    if (chartUnitsInstance) chartUnitsInstance.destroy();
+    chartUnitsInstance = new Chart(ctxUnits, {
+      type: 'bar',
+      data: {
+        labels: labels,
+        datasets: [{
+          label: 'Candidatos',
+          data: data,
+          backgroundColor: '#211551',
+          hoverBackgroundColor: '#3c2980',
+          borderRadius: 6,
+          barThickness: 16
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        indexAxis: 'y',
+        plugins: {
+          legend: { display: false }
+        },
+        scales: {
+          x: {
+            grid: { color: '#f1f5f9' },
+            ticks: { font: { family: 'Inter', size: 11 }, color: '#94a3b8' }
+          },
+          y: {
+            grid: { display: false },
+            ticks: { font: { family: 'Inter', size: 11, weight: '600' }, color: '#334155' }
+          }
+        }
+      }
+    });
+  }
+}
+
 function updateStats() {
   const total   = state.candidates.length;
   const done    = state.candidates.filter(c => c.status === 'Concluído').length;
@@ -1387,17 +1519,19 @@ function updateStats() {
   document.getElementById('statDone').textContent    = done;
   document.getElementById('statRate').textContent    = rate + '%';
 
-  const pPending = total > 0 ? Math.round((pending / total) * 100) : 0;
-  const pDone    = total > 0 ? Math.round((done / total) * 100) : 0;
+  renderDashboardCharts();
+}
 
-  const barPending = document.getElementById('statProgressPending');
-  if (barPending) barPending.style.width = pPending + '%';
+function scrollToRecentCandidates() {
+  setView('dashboard');
+  document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
+  const navRec = document.getElementById('nav-recent');
+  if (navRec) navRec.classList.add('active');
   
-  const barDone = document.getElementById('statProgressDone');
-  if (barDone) barDone.style.width = pDone + '%';
-
-  const barRate = document.getElementById('statProgressRate');
-  if (barRate) barRate.style.width = rate + '%';
+  const el = document.getElementById('sectionRecentCandidates');
+  if (el) {
+    el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
 }
 
 function updateSyncTimestamp() {
@@ -1475,7 +1609,12 @@ function clearFilters() {
 function formatContractName(contrato) {
   const str = String(contrato || '').trim();
   if (!str) return '';
-  return str.toLowerCase().replace(/(?:^|\s|-)\S/g, function(a) { return a.toUpperCase(); });
+  // Se for código com traço (ex: "206 - Cajamar" ou "618 - Indaiatuba")
+  return str.split('-').map(part => {
+    const p = part.trim();
+    if (/^\d+$/.test(p)) return p; // Mantém número como está (ex: 206, 618)
+    return p.toLowerCase().replace(/(?:^|\s)\S/g, a => a.toUpperCase());
+  }).join(' - ');
 }
 
 function formatVagaDisplay(vaga) {
