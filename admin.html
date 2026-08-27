@@ -2133,14 +2133,16 @@ async function generateCandidateLocalPDF(token, nome) {
       botaNumero: r.NúmeroBota || r.NumeroBota || '',
       camisaTamanho: r.TamanhoCamisa || '',
       calcaTamanho: r.TamanhoCalça || r.TamanhoCalca || '',
+      racaCor: r['RaçaCor'] || r.RacaCor || '',
       optanteVT: r.OptanteVT || 'Não',
       planoSaudeOpcao: 'a',
       dependente1Nome: r.Dep1Nome || '',
       dependente1Cpf: r.Dep1CPF || r.Dep1Cpf || '',
       dependente2Nome: r.Dep2Nome || '',
       dependente2Cpf: r.Dep2CPF || r.Dep2Cpf || '',
-      tipoAssinatura: r.TipoAssinatura || 'texto',
-      assinaturaDigitada: r.NomeCompleto || r.NomeCandidato || nome || ''
+      tipoAssinatura: r.TipoAssinatura || (r.AssinaturaBase64 ? 'desenho' : 'texto'),
+      assinaturaDigitada: r.NomeCompleto || r.NomeCandidato || nome || '',
+      assinaturaBase64: r.AssinaturaBase64 || r.assinaturaBase64 || ''
     };
 
     // Parser dos dependentes de IR
@@ -2479,8 +2481,17 @@ async function generateCandidateLocalPDF(token, nome) {
 
     y += 15.0;
 
-    // Simulated handwritten cursive signature using Canvas + EB Garamond font fallback
-    if (formData.assinaturaDigitada && formData.assinaturaDigitada.trim() !== '') {
+    // Assinatura (Desenho feito na tela OU Digitação cursiva)
+    if (formData.tipoAssinatura === 'desenho' && formData.assinaturaBase64) {
+      try {
+        const sigWidth = 50;
+        const sigHeight = 12.5;
+        const sigX = marginX + (printableWidth - sigWidth) / 2;
+        doc.addImage(formData.assinaturaBase64, 'PNG', sigX, y - sigHeight - 0.5, sigWidth, sigHeight);
+      } catch (sigErr) {
+        console.error("Erro ao incluir assinatura desenhada no PDF local:", sigErr);
+      }
+    } else if (formData.assinaturaDigitada && formData.assinaturaDigitada.trim() !== '') {
       try {
         const sigCanvas = document.createElement("canvas");
         sigCanvas.width = 480;

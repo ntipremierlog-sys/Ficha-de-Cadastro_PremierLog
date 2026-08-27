@@ -904,22 +904,40 @@
           doc.text("ASSINATURA DO FUNCIONÁRIO", marginX + printableWidth / 2, y + 4.5, { align: "center" });
 
           // Salvar o PDF localmente (download)
-          // ETAPA 2: Enviar apenas dados do formulário (sem o PDF pesado) — Rápido e Seguro!
+          const cleanName = formData.nomeCompleto.trim().replace(/\s+/g, '_').slice(0, 30);
+          const fileName = `Ficha_Cadastro_${cleanName}.pdf`;
+          doc.save(fileName);
+
+          // Obter assinatura desenhada em base64 se houver
+          let assinaturaBase64 = '';
+          if (formData.tipoAssinatura === 'desenho' && canvasRef.current && hasSigned) {
+            try {
+              assinaturaBase64 = canvasRef.current.toDataURL("image/png");
+            } catch(e) {}
+          }
+
+          const submissionFormData = {
+            ...formData,
+            assinaturaBase64: assinaturaBase64
+          };
+
+          // ETAPA 2: Enviar dados e PDF oficial para salvar no Drive
           if (token && APPS_SCRIPT_URL !== 'COLE_A_URL_DO_APPS_SCRIPT_AQUI') {
+            const pdfBase64 = doc.output('datauristring');
             const MAX_RETRIES = 3;
             let serverSuccess = false;
             let lastServerError = null;
 
             for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
               try {
-                console.log(`Tentativa ${attempt} de salvar dados textuais...`);
+                console.log(`Tentativa ${attempt} de registrar formulário e PDF no servidor...`);
                 const submitResponse = await fetch(APPS_SCRIPT_URL, {
                   method: 'POST',
                   body: JSON.stringify({
                     action: 'submitForm',
                     token: token,
-                    formData: formData,
-                    pdfBase64: '' // Envia vazio para ser rápido
+                    formData: submissionFormData,
+                    pdfBase64: pdfBase64
                   })
                 });
                 const submitResult = await submitResponse.json();
@@ -931,7 +949,7 @@
                   if (lastServerError.includes('já preenchido')) {
                     serverSuccess = true;
                   }
-                  break; // Erro de lógica do servidor — não tenta novamente
+                  break;
                 }
               } catch (err) {
                 lastServerError = err.message || 'Erro de rede';
@@ -943,58 +961,18 @@
             }
 
             if (!serverSuccess) {
-              // Também tenta salvar o PDF localmente em caso de falha de conexão, para o usuário não perder o documento
-              try {
-                const cleanName = formData.nomeCompleto.trim().replace(/\s+/g, '_').slice(0, 30);
-                const fileName = `Ficha_Cadastro_${cleanName}.pdf`;
-                doc.save(fileName);
-              } catch (pdfErr) {
-                console.error("Erro ao salvar PDF localmente:", pdfErr);
-              }
-
               const errMsg = lastServerError || 'Erro de conexão';
               setErrors({
-                global: `⚠️ Houve um problema ao registrar sua ficha no sistema (${errMsg}). Contudo, salvamos uma cópia do PDF em seu dispositivo. Por favor, tente enviar novamente ou encaminhe o PDF ao RH.`
+                global: `⚠️ Houve um problema ao registrar sua ficha no sistema (${errMsg}). Contudo, uma cópia do PDF com sua assinatura foi baixada em seu dispositivo. Por favor, tente enviar novamente ou encaminhe o PDF ao RH.`
               });
               setIsGenerating(false);
               return;
             }
-          }
 
-          // Salvar o PDF localmente (download)
-          const cleanName = formData.nomeCompleto.trim().replace(/\s+/g, '_').slice(0, 30);
-          const fileName = `Ficha_Cadastro_${cleanName}.pdf`;
-          doc.save(fileName);
+            setIsFormSubmitted(true);
+          }
 
           setSuccessMessage('Ficha cadastral gerada com sucesso! O download do PDF iniciou automaticamente.');
-          
-          if (token && APPS_SCRIPT_URL !== 'COLE_A_URL_DO_APPS_SCRIPT_AQUI') {
-            setIsFormSubmitted(true);
-            
-            // ETAPA 3: Enviar o PDF em segundo plano (assíncrono/background)
-            (async () => {
-              try {
-                console.log('Enviando PDF em segundo plano...');
-                const pdfBase64 = doc.output('datauristring');
-                const uploadResponse = await fetch(APPS_SCRIPT_URL, {
-                  method: 'POST',
-                  body: JSON.stringify({
-                    action: 'uploadPDF',
-                    token: token,
-                    pdfBase64: pdfBase64
-                  })
-                });
-                const uploadResult = await uploadResponse.json();
-                if (uploadResult.success) {
-                  console.log('PDF enviado e salvo no Drive com sucesso:', uploadResult.pdfUrl);
-                } else {
-                  console.warn('Erro ao salvar PDF no Drive (segundo plano):', uploadResult.error);
-                }
-              } catch (uploadErr) {
-                console.error('Erro de conexão ao enviar PDF em segundo plano:', uploadErr);
-              }
-            })();
-          }
         } catch (err) {
           console.error('Erro na geração do PDF:', err);
           setErrors({ global: 'Ocorreu um erro ao gerar o PDF. Veja os detalhes no console do navegador.' });
