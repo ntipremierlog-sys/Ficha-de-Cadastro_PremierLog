@@ -221,8 +221,9 @@
       const [vaga, setVaga] = useState('');
       const vagaLower = (vaga || '').toLowerCase();
       const hasHealthPlan = !token || vagaLower.includes('1268') || vagaLower.includes('158') || vagaLower.includes('salvador') || vagaLower.includes('teca');
-      // Contrato 618 - Indaiatuba não oferece Vale Transporte
-      const hasVT = !vagaLower.includes('618');
+      // Contrato 618 - Indaiatuba oferece Transporte Fretado devido à localidade de difícil acesso
+      const isIndaiatuba = vagaLower.includes('618') || vagaLower.includes('indaiatuba');
+      const hasVT = true;
       const [isValidatingToken, setIsValidatingToken] = useState(true);
       const [tokenError, setTokenError] = useState(null);
       const [isFormSubmitted, setIsFormSubmitted] = useState(false);
@@ -237,9 +238,14 @@
           const hashParams = new URLSearchParams(window.location.hash.substring(1));
           tokenParam = hashParams.get('token');
         }
+
+        const vagaUrlParam = urlParams.get('vaga') || urlParams.get('contrato');
+        if (vagaUrlParam) {
+          setVaga(vagaUrlParam);
+        }
         
         if (!tokenParam) {
-          if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+          if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || vagaUrlParam) {
             setIsValidatingToken(false);
           } else {
             setTokenError("Acesso restrito. A Ficha de Cadastro de Admissão da Premier Logistics só pode ser acessada através do link pessoal fornecido pelo RH.");
@@ -672,9 +678,20 @@
           drawField("CALÇA (TAMANHO)", formData.calcaTamanho || 'N/A', marginX + 152, 34);
           y += 13.0;
 
-          // 6. BENEFÍCIOS - VALE TRANSPORTE
-          if (hasVT) {
-            drawSectionHeader("Benefícios - Vale Transporte");
+          // 6. BENEFÍCIOS - VALE TRANSPORTE / TRANSPORTE FRETADO
+          if (isIndaiatuba) {
+            drawSectionHeader("Benefícios — Transporte Fretado (Indaiatuba)");
+
+            drawField("OPTANTE PELO TRANSPORTE FRETADO?", formData.optanteVT, marginX, printableWidth);
+            y += 10.0;
+
+            doc.setFont("helvetica", "italic");
+            doc.setFontSize(6.8);
+            doc.setTextColor(110, 120, 130);
+            doc.text("Unidade de difícil acesso atendida por Transporte Fretado. Optante autoriza desconto de até 6% em folha (Dec. nº 95.247/87 / CLT).", marginX, y);
+            y += 12.0;
+          } else if (hasVT) {
+            drawSectionHeader("Benefícios — Vale Transporte");
 
             drawField("OPTANTE PELO VALE TRANSPORTE?", formData.optanteVT, marginX, printableWidth);
             y += 10.0;
@@ -1704,19 +1721,40 @@
               </div>
             </div>
 
-            {/* SECTION 6: BENEFÍCIOS - VALE TRANSPORTE */}
+            {/* SECTION 6: BENEFÍCIOS - VALE TRANSPORTE / TRANSPORTE FRETADO */}
             {hasVT ? (
             <div className="space-y-6">
               <div className="flex items-center gap-3 border-b border-slate-100 pb-3">
                 <div className="w-8 h-8 rounded-lg bg-premier-blue/10 flex items-center justify-center text-premier-blue font-bold text-sm">06</div>
-                <h2 className="text-lg font-bold text-premier-blue">Benefícios — Vale Transporte (VT)</h2>
+                <h2 className="text-lg font-bold text-premier-blue">
+                  {isIndaiatuba ? 'Benefícios — Transporte Fretado (Unidade Indaiatuba)' : 'Benefícios — Vale Transporte (VT)'}
+                </h2>
               </div>
+
+              {isIndaiatuba && (
+                <div className="bg-amber-50/70 border border-amber-200/80 rounded-2xl p-4 flex items-start gap-3 text-xs leading-relaxed text-amber-900 animate-fade-in">
+                  <div className="shrink-0 mt-0.5 text-amber-600">
+                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                  </div>
+                  <div>
+                    <span className="font-bold block mb-0.5 text-amber-950">Informação sobre o Transporte na Unidade:</span>
+                    Devido à localização da nossa unidade de Indaiatuba em região de difícil acesso pelo transporte público convencional, a <strong>Premier Logistics</strong> disponibiliza o serviço de <strong>Transporte Fretado</strong> exclusivo, visando garantir maior segurança, pontualidade e conforto no deslocamento diário residência–trabalho–residência.
+                  </div>
+                </div>
+              )}
 
               <div className="grid grid-cols-1 gap-6">
                 <div>
-                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Optante pelo Vale Transporte?</label>
+                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">
+                    {isIndaiatuba ? 'Optante pelo Transporte Fretado?' : 'Optante pelo Vale Transporte?'}
+                  </label>
                   <PillSelector
-                    options={[
+                    options={isIndaiatuba ? [
+                      { label: 'Sim, desejo utilizar o Fretado', value: 'Sim' },
+                      { label: 'Não desejo utilizar o Fretado', value: 'Não' }
+                    ] : [
                       { label: 'Sim, desejo receber o VT', value: 'Sim' },
                       { label: 'Não desejo receber o VT', value: 'Não' }
                     ]}
@@ -1747,16 +1785,30 @@
                     </div>
                     <div>
                       <span className="font-bold block mb-1">
-                        {formData.optanteVT === 'Sim' ? 'Opção selecionada: Desejo receber o VT' : 'Opção selecionada: Não desejo receber o VT'}
+                        {isIndaiatuba
+                          ? (formData.optanteVT === 'Sim' ? 'Opção selecionada: Desejo utilizar o Transporte Fretado' : 'Opção selecionada: Não desejo utilizar o Transporte Fretado')
+                          : (formData.optanteVT === 'Sim' ? 'Opção selecionada: Desejo receber o VT' : 'Opção selecionada: Não desejo receber o VT')}
                       </span>
-                      {formData.optanteVT === 'Sim' ? (
-                        <p>
-                          Ao optar por receber o Vale Transporte, a empresa fornecerá o benefício para o seu deslocamento diário residência-trabalho-residência. Haverá o desconto regulamentar em folha de pagamento de até <strong>6% do seu salário base</strong>. <strong>Esta opção constará no seu contrato de trabalho.</strong>
-                        </p>
+                      {isIndaiatuba ? (
+                        formData.optanteVT === 'Sim' ? (
+                          <p>
+                            Ao optar pela utilização do transporte fretado para o seu deslocamento diário residência-trabalho-residência, haverá o desconto regulamentar em folha de pagamento de até <strong>6% do seu salário base mensal</strong>, conforme o Art. 9º do Decreto nº 95.247/1987 e legislação trabalhista vigente (CLT). <strong>Esta opção constará no seu contrato de trabalho.</strong>
+                          </p>
+                        ) : (
+                          <p>
+                            Ao optar por não utilizar o transporte fretado, você declara que utilizará meios próprios de locomoção para o trajeto residência-trabalho-residência. <strong>Não haverá nenhum desconto de 6%</strong> em sua folha de pagamento. <strong>Esta declaração constará no seu contrato de trabalho.</strong>
+                          </p>
+                        )
                       ) : (
-                        <p>
-                          Ao optar por não receber o Vale Transporte, você declara que utiliza meios próprios de locomoção ou que não necessita do benefício para o trajeto residência-trabalho-residência. <strong>Não haverá nenhum desconto de 6%</strong> em sua folha de pagamento. <strong>Esta declaração constará no seu contrato de trabalho.</strong>
-                        </p>
+                        formData.optanteVT === 'Sim' ? (
+                          <p>
+                            Ao optar por receber o Vale Transporte, a empresa fornecerá o benefício para o seu deslocamento diário residência-trabalho-residência. Haverá o desconto regulamentar em folha de pagamento de até <strong>6% do seu salário base</strong>. <strong>Esta opção constará no seu contrato de trabalho.</strong>
+                          </p>
+                        ) : (
+                          <p>
+                            Ao optar por não receber o Vale Transporte, você declara que utiliza meios próprios de locomoção ou que não necessita do benefício para o trajeto residência-trabalho-residência. <strong>Não haverá nenhum desconto de 6%</strong> em sua folha de pagamento. <strong>Esta declaração constará no seu contrato de trabalho.</strong>
+                          </p>
+                        )
                       )}
                     </div>
                   </div>
@@ -1764,7 +1816,9 @@
 
                 <div className="bg-slate-50 border border-slate-100 rounded-2xl p-4 text-xs text-slate-500 leading-relaxed italic">
                   <span className="font-bold text-premier-blue not-italic block mb-0.5">Informação Legal:</span>
-                  Conforme art. 9º do Decreto nº 95.247/1987, o desconto referente ao VT é de até 6% do salário base do colaborador, descontado em folha mensalmente.
+                  {isIndaiatuba
+                    ? 'Conforme disposto na Lei nº 7.418/1985 e no Art. 9º do Decreto nº 95.247/1987, o fornecimento de transporte próprio/fretado pelo empregador para localidade de difícil acesso autoriza o desconto de até 6% do salário base do empregado beneficiado.'
+                    : 'Conforme art. 9º do Decreto nº 95.247/1987, o desconto referente ao VT é de até 6% do salário base do colaborador, descontado em folha mensalmente.'}
                 </div>
               </div>
             </div>
@@ -2145,7 +2199,7 @@
                   </div>
                   <div>
                     <h3 className="text-base font-extrabold text-premier-blue uppercase tracking-wider font-sans">
-                      Confirmação de Opção de VT
+                      {isIndaiatuba ? 'Confirmação — Transporte Fretado' : 'Confirmação — Vale Transporte'}
                     </h3>
                     <p className="text-slate-400 text-xs mt-0.5">Por favor, leia atentamente as informações abaixo</p>
                   </div>
@@ -2154,22 +2208,30 @@
                 <div className="space-y-4 text-slate-600 text-sm leading-relaxed">
                   {vtModal.option === 'Sim' ? (
                     <>
-                      <p className="font-semibold text-slate-800">Você optou por RECEBER o Vale Transporte.</p>
-                      <p>
-                        A empresa fornecerá o benefício correspondente ao seu deslocamento diário residência-trabalho-residência.
+                      <p className="font-semibold text-slate-800">
+                        {isIndaiatuba ? 'Você optou por UTILIZAR o Transporte Fretado.' : 'Você optou por RECEBER o Vale Transporte.'}
                       </p>
                       <p>
-                        Conforme a legislação vigente, haverá o desconto regulamentar em sua folha de pagamento de até <strong>6% do seu salário base mensal</strong>.
+                        {isIndaiatuba
+                          ? 'A empresa disponibilizará o serviço de transporte fretado exclusivo para o seu deslocamento diário residência-trabalho-residência na unidade de Indaiatuba.'
+                          : 'A empresa fornecerá o benefício correspondente ao seu deslocamento diário residência-trabalho-residência.'}
+                      </p>
+                      <p>
+                        Conforme a legislação vigente (Art. 9º do Decreto nº 95.247/1987 e CLT), haverá o desconto regulamentar em sua folha de pagamento de até <strong>6% do seu salário base mensal</strong>.
                       </p>
                       <div className="bg-blue-50/50 border border-blue-100 rounded-2xl p-4 text-xs text-blue-800 font-medium">
-                        ⚠️ <strong>Importante:</strong> Esta decisão de adesão ao Vale Transporte constará no seu <strong>contrato de trabalho</strong>.
+                        ⚠️ <strong>Importante:</strong> Esta decisão de adesão ao {isIndaiatuba ? 'Transporte Fretado' : 'Vale Transporte'} constará no seu <strong>contrato de trabalho</strong>.
                       </div>
                     </>
                   ) : (
                     <>
-                      <p className="font-semibold text-slate-800">Você optou por NÃO RECEBER o Vale Transporte.</p>
+                      <p className="font-semibold text-slate-800">
+                        {isIndaiatuba ? 'Você optou por NÃO UTILIZAR o Transporte Fretado.' : 'Você optou por NÃO RECEBER o Vale Transporte.'}
+                      </p>
                       <p>
-                        Ao declinar o benefício, você declara sob as penas da lei que utiliza meios próprios de locomoção ou que não necessita de transporte público para o trajeto residência-trabalho-residência.
+                        {isIndaiatuba
+                          ? 'Ao declinar o transporte fretado, você declara que utilizará meios próprios de locomoção para o trajeto residência-trabalho-residência.'
+                          : 'Ao declinar o benefício, você declara sob as penas da lei que utiliza meios próprios de locomoção ou que não necessita de transporte público para o trajeto residência-trabalho-residência.'}
                       </p>
                       <p>
                         Portanto, <strong>não haverá nenhum desconto de 6%</strong> em sua folha de pagamento referente a este benefício.
