@@ -680,7 +680,7 @@
 
           // 6. BENEFÍCIOS - VALE TRANSPORTE / TRANSPORTE FRETADO
           if (isIndaiatuba) {
-            drawSectionHeader("Benefícios — Transporte Fretado (Indaiatuba)");
+            drawSectionHeader("Benefícios — Transporte Fretado");
 
             drawField("OPTANTE PELO TRANSPORTE FRETADO?", formData.optanteVT, marginX, printableWidth);
             y += 10.0;
@@ -1727,7 +1727,7 @@
               <div className="flex items-center gap-3 border-b border-slate-100 pb-3">
                 <div className="w-8 h-8 rounded-lg bg-premier-blue/10 flex items-center justify-center text-premier-blue font-bold text-sm">06</div>
                 <h2 className="text-lg font-bold text-premier-blue">
-                  {isIndaiatuba ? 'Benefícios — Transporte Fretado (Unidade Indaiatuba)' : 'Benefícios — Vale Transporte (VT)'}
+                  {isIndaiatuba ? 'Benefícios — Transporte Fretado' : 'Benefícios — Vale Transporte (VT)'}
                 </h2>
               </div>
 
@@ -1740,7 +1740,7 @@
                   </div>
                   <div>
                     <span className="font-bold block mb-0.5 text-amber-950">Informação sobre o Transporte na Unidade:</span>
-                    Devido à localização da nossa unidade de Indaiatuba em região de difícil acesso pelo transporte público convencional, a <strong>Premier Logistics</strong> disponibiliza o serviço de <strong>Transporte Fretado</strong> exclusivo, visando garantir maior segurança, pontualidade e conforto no deslocamento diário residência–trabalho–residência.
+                    Devido à localização da nossa unidade ser em região de difícil acesso pelo transporte público convencional, a <strong>Premier Logistics</strong> disponibiliza o serviço de <strong>Transporte Fretado</strong> exclusivo, visando garantir maior segurança, pontualidade e conforto no deslocamento diário residência–trabalho–residência.
                   </div>
                 </div>
               )}
@@ -2213,7 +2213,7 @@
                       </p>
                       <p>
                         {isIndaiatuba
-                          ? 'A empresa disponibilizará o serviço de transporte fretado exclusivo para o seu deslocamento diário residência-trabalho-residência na unidade de Indaiatuba.'
+                          ? 'A empresa disponibilizará o serviço de transporte fretado exclusivo para o seu deslocamento diário residência-trabalho-residência.'
                           : 'A empresa fornecerá o benefício correspondente ao seu deslocamento diário residência-trabalho-residência.'}
                       </p>
                       <p>
