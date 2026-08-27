@@ -525,36 +525,37 @@
     .candidate-info strong { font-weight: 600; color: var(--text); font-size: 13.5px; }
     .candidate-info span { font-size: 12px; color: var(--text-3); }
 
-    .td-vaga-wrap { display: flex; flex-direction: column; gap: 4px; }
-    .td-funcao { font-weight: 600; font-size: 13px; color: var(--navy); }
+    .td-vaga-wrap { display: flex; flex-direction: column; gap: 2px; }
+    .td-funcao { font-weight: 600; font-size: 13.5px; color: var(--navy); }
 
     .badge-contrato {
-      display: inline-flex; align-items: center; gap: 4px;
-      padding: 2.5px 8px; border-radius: 6px; font-size: 11px; font-weight: 600;
-      letter-spacing: 0.2px; width: fit-content;
+      display: inline-flex; align-items: center;
+      font-size: 12px; font-weight: 500;
+      color: #64748b; background: transparent; border: none; padding: 0;
+      letter-spacing: 0; width: fit-content;
     }
-    .badge-contrato.indaiatuba { background: #fef3c7; color: #92400e; border: 1px solid #fde68a; }
-    .badge-contrato.cajamar    { background: #e0e7ff; color: #3730a3; border: 1px solid #c7d2fe; }
-    .badge-contrato.salvador   { background: #ecfdf5; color: #065f46; border: 1px solid #a7f3d0; }
-    .badge-contrato.rodoanel   { background: #ede9fe; color: #5b21b6; border: 1px solid #ddd6fe; }
-    .badge-contrato.guarulhos  { background: #ffedd5; color: #9a3412; border: 1px solid #fed7aa; }
-    .badge-contrato.petrobras  { background: #f0fdf4; color: #166534; border: 1px solid #bbf7d0; }
-    .badge-contrato.default    { background: #f1f5f9; color: #475569; border: 1px solid #e2e8f0; }
+    .badge-contrato.indaiatuba { color: #b45309; font-weight: 600; }
+    .badge-contrato.cajamar    { color: #4338ca; font-weight: 600; }
+    .badge-contrato.salvador   { color: #047857; font-weight: 600; }
+    .badge-contrato.rodoanel   { color: #6d28d9; font-weight: 600; }
+    .badge-contrato.guarulhos  { color: #c2410c; font-weight: 600; }
+    .badge-contrato.petrobras  { color: #15803d; font-weight: 600; }
+    .badge-contrato.default    { color: #64748b; }
 
     .badge {
       display: inline-flex; align-items: center; gap: 6px;
-      padding: 4px 10px; border-radius: 20px;
-      font-size: 12px; font-weight: 600; white-space: nowrap;
+      font-size: 12.5px; font-weight: 600; white-space: nowrap;
+      background: transparent; border: none; padding: 0;
     }
-    .badge::before { content: ''; width: 6px; height: 6px; border-radius: 50%; display: inline-block; }
+    .badge::before { content: ''; width: 6.5px; height: 6.5px; border-radius: 50%; display: inline-block; }
     .badge-pending {
-      background: var(--warning-bg); color: #92400e; border: 1px solid #fde68a;
+      color: #d97706; background: transparent; border: none;
     }
-    .badge-pending::before { background: var(--warning); }
+    .badge-pending::before { background: #f59e0b; }
     .badge-done {
-      background: var(--success-bg); color: #065f46; border: 1px solid #a7f3d0;
+      color: #059669; background: transparent; border: none;
     }
-    .badge-done::before { background: var(--success); }
+    .badge-done::before { background: #10b981; }
     .td-date { font-size: 12.5px; color: var(--text-2); white-space: nowrap; }
     .td-actions { white-space: nowrap; width: 160px; }
 
@@ -843,7 +844,7 @@
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="9"/><rect x="14" y="3" width="7" height="5"/><rect x="14" y="12" width="7" height="9"/><rect x="3" y="16" width="7" height="5"/></svg>
           Dashboard
         </div>
-        <div class="nav-item" onclick="scrollToRecentCandidates()" id="nav-recent">
+        <div class="nav-item" onclick="setView('recent')" id="nav-recent">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
           Candidatos Recentes
         </div>
@@ -975,11 +976,14 @@
               </div>
             </div>
           </div>
+        </div>
 
-          <div class="panel" id="sectionRecentCandidates">
+        <!-- CANDIDATOS RECENTES (TELA SEPARADA) -->
+        <div id="viewRecent" style="display:none;">
+          <div class="panel">
             <div class="panel-header">
-              <span class="panel-title">Candidatos Recentes</span>
-              <button class="btn-primary" style="font-size:12.5px;padding:7px 14px;" onclick="setView('candidates')">Ver todos →</button>
+              <span class="panel-title">Últimos Candidatos Cadastrados</span>
+              <button class="btn-primary" style="font-size:12.5px;padding:7px 14px;" onclick="setView('candidates')">Ver Todos os Candidatos →</button>
             </div>
             <div class="table-wrap">
               <table>
@@ -992,7 +996,7 @@
                     <th>AÇÕES</th>
                   </tr>
                 </thead>
-                <tbody id="dashboardTableBody">
+                <tbody id="recentTableBody">
                   <tr class="skeleton-row"><td><div style="width:160px"></div></td><td><div style="width:120px"></div></td><td><div style="width:80px"></div></td><td><div style="width:100px"></div></td><td><div style="width:120px"></div></td></tr>
                   <tr class="skeleton-row"><td><div style="width:140px"></div></td><td><div style="width:100px"></div></td><td><div style="width:80px"></div></td><td><div style="width:100px"></div></td><td><div style="width:120px"></div></td></tr>
                   <tr class="skeleton-row"><td><div style="width:180px"></div></td><td><div style="width:130px"></div></td><td><div style="width:80px"></div></td><td><div style="width:100px"></div></td><td><div style="width:120px"></div></td></tr>
@@ -1323,12 +1327,22 @@ if (sessionStorage.getItem('rh_auth') === '1') {
 function setView(v) {
   state.currentView = v;
   document.getElementById('viewDashboard').style.display  = v === 'dashboard'  ? 'block' : 'none';
+  document.getElementById('viewRecent').style.display     = v === 'recent'     ? 'block' : 'none';
   document.getElementById('viewCandidates').style.display = v === 'candidates' ? 'block' : 'none';
   document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
   document.getElementById('nav-' + v).classList.add('active');
-  const titles = { dashboard: ['Dashboard', 'Visão geral dos processos seletivos'], candidates: ['Candidatos', 'Gerenciar candidatos e acompanhar status'] };
-  document.getElementById('topbarTitle').textContent = titles[v][0];
-  document.getElementById('topbarSub').textContent   = titles[v][1];
+  const titles = { 
+    dashboard: ['Dashboard', 'Visão geral dos processos seletivos e indicadores'], 
+    recent: ['Candidatos Recentes', 'Acompanhamento dos últimos cadastros'],
+    candidates: ['Todos Candidatos', 'Gerenciar candidatos e acompanhar status'] 
+  };
+  if (titles[v]) {
+    document.getElementById('topbarTitle').textContent = titles[v][0];
+    document.getElementById('topbarSub').textContent   = titles[v][1];
+  }
+  if (v === 'recent') {
+    renderRecentTable();
+  }
 }
 
 // ============================================================
@@ -1393,7 +1407,7 @@ async function loadCandidates() {
     updateStats();
     populateFilters();
     applyFilters();
-    renderDashboardTable();
+    renderRecentTable();
     updateSyncTimestamp();
     
     const badge = document.getElementById('sidebarBadge');
@@ -1747,10 +1761,14 @@ function formatDisplayDate(dateStr) {
   return dateStr;
 }
 
-function renderDashboardTable() {
-  const tbody = document.getElementById('dashboardTableBody');
-  const list  = state.candidates.slice(0, 5);
-  if (!list.length) { tbody.innerHTML = '<tr><td colspan="5"><div class="empty-state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="23" y1="11" x2="17" y2="11"/><line x1="20" y1="8" x2="20" y2="14"/></svg><h4>Nenhum candidato ainda</h4><p>Clique em "Novo Candidato" para começar.</p></div></td></tr>'; return; }
+function renderRecentTable() {
+  const tbody = document.getElementById('recentTableBody');
+  if (!tbody) return;
+  const list  = state.candidates.slice(0, 15);
+  if (!list.length) { 
+    tbody.innerHTML = '<tr><td colspan="5"><div class="empty-state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="23" y1="11" x2="17" y2="11"/><line x1="20" y1="8" x2="20" y2="14"/></svg><h4>Nenhum candidato ainda</h4><p>Clique em "Novo Candidato" para começar.</p></div></td></tr>'; 
+    return; 
+  }
   tbody.innerHTML = list.map(c => {
     const { funcao, contrato } = extractVagaParts(c.vaga);
     return `
