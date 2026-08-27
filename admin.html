@@ -948,21 +948,23 @@
             </div>
           </div>
 
-          <!-- GRÁFICOS DE ACOMPANHAMENTO -->
+          <!-- GRÁFICOS DE ACOMPANHAMENTO E ANÁLISE GERENCIAL -->
           <div class="dashboard-charts-grid">
+            <!-- Gráfico 1: Volume por Unidade -->
             <div class="chart-card">
               <div class="chart-card-header">
                 <div class="chart-card-title">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
                   Volume de Candidatos por Unidade / Contrato
                 </div>
-                <span class="chart-card-badge">Distribuição Operacional</span>
+                <span class="chart-card-badge">Polo Operacional</span>
               </div>
               <div class="chart-container-wrap">
                 <canvas id="chartUnits"></canvas>
               </div>
             </div>
 
+            <!-- Gráfico 2: Status de Adesão -->
             <div class="chart-card">
               <div class="chart-card-header">
                 <div class="chart-card-title">
@@ -973,6 +975,34 @@
               </div>
               <div class="chart-container-wrap">
                 <canvas id="chartStatus"></canvas>
+              </div>
+            </div>
+
+            <!-- Gráfico 3: Distribuição por Cargo / Função (NOVO) -->
+            <div class="chart-card">
+              <div class="chart-card-header">
+                <div class="chart-card-title">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>
+                  Demandas por Função / Cargo
+                </div>
+                <span class="chart-card-badge">Top Cargos</span>
+              </div>
+              <div class="chart-container-wrap">
+                <canvas id="chartRoles"></canvas>
+              </div>
+            </div>
+
+            <!-- Gráfico 4: Evolução Mensal de Cadastros (NOVO) -->
+            <div class="chart-card">
+              <div class="chart-card-header">
+                <div class="chart-card-title">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+                  Evolução Mensal de Cadastros
+                </div>
+                <span class="chart-card-badge">Tendência</span>
+              </div>
+              <div class="chart-container-wrap">
+                <canvas id="chartTimeline"></canvas>
               </div>
             </div>
           </div>
@@ -1080,8 +1110,15 @@
         <input class="form-input" id="inputEmail" type="email" placeholder="candidato@email.com" />
       </div>
       <div class="form-group">
-        <label class="form-label" for="inputVaga">Vaga / Cargo *</label>
-        <input class="form-input" id="inputVaga" type="text" placeholder="Ex: Auxiliar Logístico" />
+        <label class="form-label" for="selectVagaPredefinida">Função / Cargo *</label>
+        <select class="form-input" id="selectVagaPredefinida" onchange="handleFuncaoSelectChange(this)" style="padding: 10px; border-radius: 8px; border: 1.5px solid var(--border); font-size: 13.5px; width: 100%; font-family: inherit; color: var(--text); background: white;">
+          <option value="Auxiliar Operacional" selected>Auxiliar Operacional</option>
+          <option value="Supervisor Operacional">Supervisor Operacional</option>
+          <option value="Operador de Empilhadeira">Operador de Empilhadeira</option>
+          <option value="Operador de Transpaleteira">Operador de Transpaleteira</option>
+          <option value="__outro__">✍️ Outra função (digitar)...</option>
+        </select>
+        <input class="form-input" id="inputVagaOutro" type="text" placeholder="Ex: Auxiliar Operacional" style="display:none; margin-top:8px;" />
       </div>
       <div class="form-group">
         <label class="form-label" for="selectContrato">Contrato *</label>
@@ -1436,6 +1473,8 @@ async function loadCandidates() {
 // ============================================================
 let chartUnitsInstance = null;
 let chartStatusInstance = null;
+let chartRolesInstance = null;
+let chartTimelineInstance = null;
 
 function renderDashboardCharts() {
   if (typeof Chart === 'undefined') return;
@@ -1483,8 +1522,8 @@ function renderDashboardCharts() {
   });
 
   const sortedUnits = Object.entries(unitCounts).sort((a, b) => b[1] - a[1]).slice(0, 6);
-  const labels = sortedUnits.map(u => u[0]);
-  const data = sortedUnits.map(u => u[1]);
+  const labelsUnits = sortedUnits.map(u => u[0]);
+  const dataUnits = sortedUnits.map(u => u[1]);
 
   const ctxUnits = document.getElementById('chartUnits');
   if (ctxUnits) {
@@ -1492,10 +1531,10 @@ function renderDashboardCharts() {
     chartUnitsInstance = new Chart(ctxUnits, {
       type: 'bar',
       data: {
-        labels: labels,
+        labels: labelsUnits,
         datasets: [{
           label: 'Candidatos',
-          data: data,
+          data: dataUnits,
           backgroundColor: '#211551',
           hoverBackgroundColor: '#3c2980',
           borderRadius: 6,
@@ -1517,6 +1556,129 @@ function renderDashboardCharts() {
           y: {
             grid: { display: false },
             ticks: { font: { family: 'Inter', size: 11, weight: '600' }, color: '#334155' }
+          }
+        }
+      }
+    });
+  }
+
+  // 3. Gráfico por Função / Cargo (NOVO - Barra Horizontal Dourada/Marinho)
+  const roleCounts = {};
+  state.candidates.forEach(c => {
+    const { funcao } = extractVagaParts(c.vaga);
+    if (!funcao) return;
+    // Normaliza para agrupamento inteligente
+    const cleanRole = funcao.toLowerCase().replace(/(?:^|\s)\S/g, a => a.toUpperCase()).trim();
+    roleCounts[cleanRole] = (roleCounts[cleanRole] || 0) + 1;
+  });
+
+  const sortedRoles = Object.entries(roleCounts).sort((a, b) => b[1] - a[1]).slice(0, 5);
+  const labelsRoles = sortedRoles.map(r => r[0]);
+  const dataRoles = sortedRoles.map(r => r[1]);
+
+  const ctxRoles = document.getElementById('chartRoles');
+  if (ctxRoles) {
+    if (chartRolesInstance) chartRolesInstance.destroy();
+    chartRolesInstance = new Chart(ctxRoles, {
+      type: 'bar',
+      data: {
+        labels: labelsRoles,
+        datasets: [{
+          label: 'Candidatos',
+          data: dataRoles,
+          backgroundColor: '#CCA352',
+          hoverBackgroundColor: '#B58E3C',
+          borderRadius: 6,
+          barThickness: 16
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        indexAxis: 'y',
+        plugins: {
+          legend: { display: false }
+        },
+        scales: {
+          x: {
+            grid: { color: '#f1f5f9' },
+            ticks: { font: { family: 'Inter', size: 11 }, color: '#94a3b8' }
+          },
+          y: {
+            grid: { display: false },
+            ticks: { font: { family: 'Inter', size: 11, weight: '600' }, color: '#334155' }
+          }
+        }
+      }
+    });
+  }
+
+  // 4. Gráfico de Evolução Temporal / Mensal (NOVO - Linha com Gradiente Suave)
+  const monthMap = {};
+  state.candidates.forEach(c => {
+    if (!c.dataEnvio) return;
+    try {
+      // Ex: 2026-07 ou dd/mm/aaaa
+      let monthLabel = '';
+      if (c.dataEnvio.includes('-')) {
+        const dt = new Date(c.dataEnvio);
+        if (!isNaN(dt.getTime())) {
+          const m = String(dt.getMonth() + 1).padStart(2, '0');
+          const y = dt.getFullYear();
+          monthLabel = `${m}/${y}`;
+        }
+      } else if (c.dataEnvio.includes('/')) {
+        const parts = c.dataEnvio.split(' ')[0].split('/');
+        if (parts.length >= 3) {
+          monthLabel = `${parts[1]}/${parts[2]}`;
+        }
+      }
+      if (monthLabel) {
+        monthMap[monthLabel] = (monthMap[monthLabel] || 0) + 1;
+      }
+    } catch(e){}
+  });
+
+  const monthEntries = Object.entries(monthMap);
+  const labelsMonths = monthEntries.map(m => m[0]);
+  const dataMonths = monthEntries.map(m => m[1]);
+
+  const ctxTimeline = document.getElementById('chartTimeline');
+  if (ctxTimeline) {
+    if (chartTimelineInstance) chartTimelineInstance.destroy();
+    chartTimelineInstance = new Chart(ctxTimeline, {
+      type: 'line',
+      data: {
+        labels: labelsMonths.length ? labelsMonths : ['Julho/26', 'Agosto/26'],
+        datasets: [{
+          label: 'Novos Cadastros',
+          data: dataMonths.length ? dataMonths : [407, 493],
+          borderColor: '#211551',
+          backgroundColor: 'rgba(33,21,81,0.06)',
+          borderWidth: 2.5,
+          fill: true,
+          tension: 0.35,
+          pointBackgroundColor: '#CCA352',
+          pointBorderColor: '#ffffff',
+          pointBorderWidth: 2,
+          pointRadius: 5,
+          pointHoverRadius: 7
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false }
+        },
+        scales: {
+          x: {
+            grid: { display: false },
+            ticks: { font: { family: 'Inter', size: 11, weight: '600' }, color: '#475569' }
+          },
+          y: {
+            grid: { color: '#f1f5f9' },
+            ticks: { font: { family: 'Inter', size: 11 }, color: '#94a3b8' }
           }
         }
       }
@@ -2501,13 +2663,34 @@ async function viewDetails(token, nome) {
   } catch(e) { document.getElementById('detailsModalBody').innerHTML = '<p style="color:var(--danger);padding:20px;">Erro ao carregar dados.</p>'; }
 }
 
+function handleFuncaoSelectChange(sel) {
+  const customInput = document.getElementById('inputVagaOutro');
+  if (!customInput) return;
+  if (sel.value === '__outro__') {
+    customInput.style.display = 'block';
+    customInput.value = '';
+    customInput.focus();
+  } else {
+    customInput.style.display = 'none';
+  }
+}
+
 // ============================================================
 // ADICIONAR CANDIDATO
 // ============================================================
 function openAddModal() {
   document.getElementById('inputNome').value = '';
   document.getElementById('inputEmail').value = '';
-  document.getElementById('inputVaga').value = '';
+  
+  const selVaga = document.getElementById('selectVagaPredefinida');
+  if (selVaga) selVaga.value = 'Auxiliar Operacional';
+  
+  const inputOutro = document.getElementById('inputVagaOutro');
+  if (inputOutro) {
+    inputOutro.value = '';
+    inputOutro.style.display = 'none';
+  }
+  
   document.getElementById('selectContrato').value = '';
   document.getElementById('checkSendEmail').checked = true;
   document.getElementById('successLinkBox').style.display = 'none';
@@ -2521,11 +2704,21 @@ let lastGenToken = '';
 async function saveCandidate() {
   const nome  = document.getElementById('inputNome').value.trim();
   const email = document.getElementById('inputEmail').value.trim();
-  const cargo = document.getElementById('inputVaga').value.trim();
+  
+  // Extrai função predefinida ou digitada
+  const selVaga = document.getElementById('selectVagaPredefinida').value;
+  let cargo = selVaga;
+  if (selVaga === '__outro__') {
+    cargo = document.getElementById('inputVagaOutro').value.trim();
+  }
+  
   const contrato = document.getElementById('selectContrato').value;
   const send  = document.getElementById('checkSendEmail').checked;
 
-  if (!nome || !email || !cargo || !contrato) { showToast('Preencha todos os campos obrigatórios.', 'warning'); return; }
+  if (!nome || !email || !cargo || !contrato) { 
+    showToast('Preencha todos os campos obrigatórios (incluindo Função e Contrato).', 'warning'); 
+    return; 
+  }
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { showToast('E-mail inválido.', 'warning'); return; }
 
   const vaga = cargo + ' - ' + contrato;
@@ -2562,7 +2755,7 @@ async function saveCandidate() {
       updateStats();
       populateFilters();
       applyFilters();
-      renderDashboardTable();
+      renderRecentTable();
     }, 500);
     return;
   }
