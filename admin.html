@@ -1544,7 +1544,8 @@ function applyFilters() {
   const cFilter  = document.getElementById('contratoFilter').value;
   
   state.filtered = state.candidates.filter(c => {
-    if (q && !(c.nome + c.email).toLowerCase().includes(q)) return false;
+    const nomeEmail = (String(c.nome || '') + ' ' + String(c.email || '')).toLowerCase();
+    if (q && !nomeEmail.includes(q)) return false;
     if (stt && c.status !== stt) return false;
     
     const { funcao, contrato } = extractVagaParts(c.vaga);
