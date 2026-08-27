@@ -2265,6 +2265,9 @@ async function generateCandidateLocalPDF(token, nome) {
     drawField("WHATSAPP / CELULAR", formData.whatsapp, marginX, 42);
     drawField("E-MAIL PESSOAL", formData.email, marginX + 46, 56);
     drawField("CONTATO DE EMERGÊNCIA", `${formData.contatoEmergenciaNome || '—'} (${formData.contatoEmergenciaTelefone || '—'})`, marginX + 106, printableWidth - 106);
+    y += 8.5;
+
+    drawField("AUTODECLARAÇÃO RAÇA / COR", formData.racaCor || formData['RaçaCor'] || 'Não informado', marginX, printableWidth);
     y += 13.0;
 
     // 2. DOCUMENTOS PESSOAIS
@@ -2608,6 +2611,7 @@ async function viewDetails(token, nome) {
             ${r.NomeSocial ? `<div class="detail-item full"><div class="dk">Nome Social</div><div class="dv">${esc(r.NomeSocial)}</div></div>` : ''}
             <div class="detail-item"><div class="dk">CPF</div><div class="dv">${esc(r.CPF)}</div></div>
             <div class="detail-item"><div class="dk">RG</div><div class="dv">${esc(r.RG)}</div></div>
+            <div class="detail-item"><div class="dk">Raça / Cor</div><div class="dv">${esc(r['RaçaCor'] || r.RacaCor || 'Não informado')}</div></div>
             <div class="detail-item"><div class="dk">Estado Civil</div><div class="dv">${esc(r.EstadoCivil)}</div></div>
             <div class="detail-item"><div class="dk">Título de Eleitor</div><div class="dv">${esc(r.TítuloEleitor)}</div></div>
           </div>
@@ -3060,6 +3064,7 @@ async function doExportExcel() {
               NomeSocial: "",
               CPF: "123.456.789-00",
               RG: "12.345.678-9",
+              'RaçaCor': "Parda",
               'Endereço': "Rua das Flores, 100",
               BairroCidade: "Brotas / Salvador - BA",
               CEP: "40285-000",

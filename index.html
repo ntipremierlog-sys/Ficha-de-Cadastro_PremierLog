@@ -187,6 +187,7 @@
         rg: '',
         cpf: '',
         tituloEleitor: '',
+        racaCor: '', // Branca, Preta, Parda, Amarela, Indígena, Prefiro não informar
         grauInstrucao: '', // 1º Grau Completo, etc.
         possuiFilhos: 'Não',
         quantosFilhos: '',
@@ -442,6 +443,7 @@
           newErrors.email = "E-mail válido é obrigatório.";
         }
         if (!formData.grauInstrucao) newErrors.grauInstrucao = "Grau de instrução é obrigatório.";
+        if (!formData.racaCor) newErrors.racaCor = "A declaração de Raça / Cor é obrigatória.";
         if (!formData.botaNumero.trim()) newErrors.botaNumero = "Tamanho da bota é obrigatório.";
         if (!formData.camisaTamanho.trim()) newErrors.camisaTamanho = "Tamanho da camisa é obrigatório.";
         if (!formData.calcaTamanho.trim()) newErrors.calcaTamanho = "Tamanho da calça é obrigatório.";
@@ -614,6 +616,9 @@
 
           drawField("CONTATO DE EMERGÊNCIA (NOME)", formData.contatoEmergenciaNome, marginX, 110);
           drawField("TELEFONE DO CONTATO", formData.contatoEmergenciaTelefone, marginX + 114, 72);
+          y += 10.0;
+
+          drawField("AUTODECLARAÇÃO RAÇA / COR", formData.racaCor || 'Não informado', marginX, 186);
           y += 13.0;
 
           // 2.5 ACESSIBILIDADE E INCLUSÃO
@@ -1273,6 +1278,55 @@
                     placeholder="(00) 00000-0000"
                     className="w-full"
                   />
+                </div>
+
+                <div className="md:col-span-3">
+                  <div className="flex items-center gap-1.5 mb-1.5">
+                    <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider">Raça / Cor *</label>
+                    <div className="group relative inline-block cursor-help">
+                      <span className="w-4 h-4 rounded-full bg-slate-100 hover:bg-premier-blue hover:text-white border border-slate-200 flex items-center justify-center text-[10px] font-bold transition-all text-slate-500">
+                        ?
+                      </span>
+                      <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 w-72 bg-slate-800 text-white text-[11px] leading-relaxed p-3 rounded-xl shadow-xl opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity duration-200 z-50">
+                        <span className="font-bold text-premier-gold block mb-1">Autodeclaração Étnico-Racial</span>
+                        Informação obrigatória para fins de registro admissional e cumprimento das exigências do eSocial / Ministério do Trabalho (IBGE).
+                        <div className="absolute top-full left-1/2 transform -translate-x-1/2 border-4 border-transparent border-t-slate-800"></div>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-2.5">
+                    {[
+                      { val: 'Branca', label: 'Branca' },
+                      { val: 'Preta', label: 'Preta' },
+                      { val: 'Parda', label: 'Parda' },
+                      { val: 'Amarela', label: 'Amarela' },
+                      { val: 'Indígena', label: 'Indígena' },
+                      { val: 'Prefiro não informar', label: 'Não declarar' }
+                    ].map(item => (
+                      <label key={item.val} className={`flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl border-2 cursor-pointer transition-all duration-200 text-xs font-semibold text-center ${
+                        formData.racaCor === item.val
+                          ? 'border-premier-blue bg-premier-blue/5 text-premier-blue shadow-sm'
+                          : 'border-slate-200 hover:border-slate-300 text-slate-600'
+                      }`}>
+                        <input
+                          type="radio"
+                          name="racaCor"
+                          value={item.val}
+                          checked={formData.racaCor === item.val}
+                          onChange={(e) => handleInputChange('racaCor', e.target.value)}
+                          className="sr-only"
+                        />
+                        <div className={`w-3.5 h-3.5 rounded-full border-2 flex items-center justify-center shrink-0 transition-all ${
+                          formData.racaCor === item.val
+                            ? 'border-premier-blue'
+                            : 'border-slate-300'
+                        }`}>
+                          {formData.racaCor === item.val && <div className="w-1.5 h-1.5 rounded-full bg-premier-blue"></div>}
+                        </div>
+                        <span className="truncate">{item.label}</span>
+                      </label>
+                    ))}
+                  </div>
                 </div>
               </div>
             </div>
