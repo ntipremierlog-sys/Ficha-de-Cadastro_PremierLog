@@ -2085,23 +2085,35 @@ async function resendMail(token, nome) {
 }
 
 async function generateCandidateLocalPDF(token, nome) {
-  showToast('Carregando respostas do candidato...', 'info');
+  showToast('Carregando PDF oficial do candidato...', 'info');
   try {
-    let data;
     if (APPS_SCRIPT_URL.includes('COLE')) {
       showToast('⚠️ URL do Apps Script não configurada para gerar PDF.', 'warning');
       return;
     }
-    data = await apiGet({ action: 'getResponse', token });
+
+    const cand = state.candidates.find(c => c.token === token);
+    
+    // Se o candidato já possui o PDF original salvo no Google Drive com a assinatura exata do formulário:
+    if (cand && cand.pdfUrl) {
+      window.open(cand.pdfUrl, '_blank', 'noopener,noreferrer');
+      showToast('📄 Abrindo PDF oficial assinado...', 'success');
+      return;
+    }
+
+    // Se não tiver pdfUrl direto no state, busca do servidor
+    const data = await apiGet({ action: 'getResponse', token });
     if (data.error) {
       showToast('Erro ao obter respostas: ' + data.error, 'error');
       return;
     }
 
     const r = data.response || {};
-    
-    // Obter dados da vaga a partir do state.candidates
-    const cand = state.candidates.find(c => c.token === token);
+    if (r.pdfUrl) {
+      window.open(r.pdfUrl, '_blank', 'noopener,noreferrer');
+      showToast('📄 Abrindo PDF oficial assinado...', 'success');
+      return;
+    }
     const vaga = cand ? cand.vaga : '';
     const vagaLower = (vaga || '').toLowerCase();
     const hasHealthPlan = vagaLower.includes('1268') || vagaLower.includes('158') || vagaLower.includes('salvador') || vagaLower.includes('teca');
