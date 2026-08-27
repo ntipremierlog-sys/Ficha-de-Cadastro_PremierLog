@@ -245,12 +245,8 @@
         }
         
         if (!tokenParam) {
-          if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || vagaUrlParam) {
-            setIsValidatingToken(false);
-          } else {
-            setTokenError("Acesso restrito. A Ficha de Cadastro de Admissão da Premier Logistics só pode ser acessada através do link pessoal fornecido pelo RH.");
-            setIsValidatingToken(false);
-          }
+          // Permite acesso público direto ao formulário
+          setIsValidatingToken(false);
           return;
         }
 
