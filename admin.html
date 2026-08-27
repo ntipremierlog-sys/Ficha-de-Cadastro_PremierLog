@@ -1342,40 +1342,32 @@ async function loadCandidates() {
   }
 
   try {
-    // Sincroniza em segundo plano status dos candidatos (sem dar await para carregar instantaneamente)
-    apiGet({ action: 'syncStatuses' })
-      .then(res => {
-        if (res && res.updated > 0) {
-          console.log('Status sincronizados, recarregando tabela...');
-          apiGet({ action: 'getCandidates' }).then(newData => {
-            if (newData && !newData.error) {
-              state.candidates = newData.candidates || [];
-              updateStats();
-              populateFilters();
-              applyFilters();
-              renderDashboardTable();
-              updateSyncTimestamp();
-            }
-          });
-        }
-      })
-      .catch(errSync => console.warn('Sync em segundo plano falhou:', errSync));
-
     const data = await apiGet({ action: 'getCandidates' });
-    if (data.error) { showToast('Erro: ' + data.error, 'error'); return; }
+    if (data.error) { 
+      showToast('Aviso da base: ' + data.error, 'error'); 
+      return; 
+    }
     state.candidates = data.candidates || [];
     updateStats();
     populateFilters();
     applyFilters();
     renderDashboardTable();
     updateSyncTimestamp();
+    
     const badge = document.getElementById('sidebarBadge');
     if (state.candidates.length > 0) {
       badge.textContent = state.candidates.length;
       badge.style.display = 'inline-block';
     }
+    const syncStatus = document.getElementById('topbarSyncStatus');
+    if (syncStatus) syncStatus.textContent = 'Sistema Ativo';
   } catch(e) {
-    if (!APPS_SCRIPT_URL.includes('COLE')) showToast('Erro ao conectar com o servidor.', 'error');
+    console.error('Erro na conexão com o Apps Script:', e);
+    if (!APPS_SCRIPT_URL.includes('COLE')) {
+      showToast('Falha na conexão: ' + (e.message || 'Verifique sua conexão ou tente recarregar.'), 'error');
+    }
+    const syncStatus = document.getElementById('topbarSyncStatus');
+    if (syncStatus) syncStatus.textContent = 'Offline / Erro';
   } finally {
     btn.classList.remove('spinning');
   }
