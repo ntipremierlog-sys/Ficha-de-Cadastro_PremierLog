@@ -1411,13 +1411,15 @@ function updateSyncTimestamp() {
 }
 
 function getInitials(name) {
-  if (!name) return 'PL';
-  const parts = name.trim().split(/\s+/).filter(Boolean);
+  const str = String(name || '').trim();
+  if (!str) return 'PL';
+  const parts = str.split(/\s+/).filter(Boolean);
   if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 }
 
 function getAvatarColor(name) {
+  const str = String(name || '').trim();
   const gradients = [
     'linear-gradient(135deg, #211551 0%, #3c2980 100%)',
     'linear-gradient(135deg, #065f46 0%, #059669 100%)',
@@ -1427,17 +1429,18 @@ function getAvatarColor(name) {
     'linear-gradient(135deg, #831843 0%, #db2777 100%)',
     'linear-gradient(135deg, #134e4a 0%, #0d9488 100%)'
   ];
-  if (!name) return gradients[0];
+  if (!str) return gradients[0];
   let hash = 0;
-  for (let i = 0; i < name.length; i++) {
-    hash = name.charCodeAt(i) + ((hash << 5) - hash);
+  for (let i = 0; i < str.length; i++) {
+    hash = str.charCodeAt(i) + ((hash << 5) - hash);
   }
   return gradients[Math.abs(hash) % gradients.length];
 }
 
 function getContractBadgeHtml(contrato) {
-  if (!contrato) return '';
-  const cLower = contrato.toLowerCase();
+  const str = String(contrato || '').trim();
+  if (!str) return '';
+  const cLower = str.toLowerCase();
   let cls = 'default';
   if (cLower.includes('indaiatuba') || cLower.includes('618')) cls = 'indaiatuba';
   else if (cLower.includes('cajamar') || cLower.includes('206')) cls = 'cajamar';
@@ -1446,7 +1449,7 @@ function getContractBadgeHtml(contrato) {
   else if (cLower.includes('guarulhos') || cLower.includes('778')) cls = 'guarulhos';
   else if (cLower.includes('petrobras')) cls = 'petrobras';
 
-  return `<span class="badge-contrato ${cls}">${esc(contrato)}</span>`;
+  return `<span class="badge-contrato ${cls}">${esc(str)}</span>`;
 }
 
 function filterByStatus(stt) {
@@ -1470,8 +1473,9 @@ function clearFilters() {
 // FILTROS
 // ============================================================
 function formatContractName(contrato) {
-  if (!contrato) return '';
-  return contrato.toLowerCase().replace(/(?:^|\s|-)\S/g, function(a) { return a.toUpperCase(); });
+  const str = String(contrato || '').trim();
+  if (!str) return '';
+  return str.toLowerCase().replace(/(?:^|\s|-)\S/g, function(a) { return a.toUpperCase(); });
 }
 
 function formatVagaDisplay(vaga) {
@@ -1481,13 +1485,14 @@ function formatVagaDisplay(vaga) {
 }
 
 function extractVagaParts(vaga) {
-  if (!vaga) return { funcao: '', contrato: '' };
-  const idx = vaga.indexOf(' - ');
+  const str = String(vaga || '').trim();
+  if (!str) return { funcao: '', contrato: '' };
+  const idx = str.indexOf(' - ');
   if (idx === -1) {
-    return { funcao: vaga.trim(), contrato: '' };
+    return { funcao: str, contrato: '' };
   }
-  const funcao = vaga.substring(0, idx).trim();
-  let contrato = vaga.substring(idx + 3).trim();
+  const funcao = str.substring(0, idx).trim();
+  let contrato = str.substring(idx + 3).trim();
   contrato = formatContractName(contrato);
   return { funcao, contrato };
 }
