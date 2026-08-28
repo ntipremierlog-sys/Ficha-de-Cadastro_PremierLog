@@ -1130,7 +1130,8 @@
           <option value="158 - Teca Salvador">158 - Teca Salvador</option>
           <option value="778 - Guarulhos">778 - Guarulhos</option>
           <option value="618 - Indaiatuba">618 - Indaiatuba</option>
-          <option value="Petrobras">Petrobras</option>
+          <option value="Petrobras - VT">Petrobras - VT</option>
+          <option value="Petrobras - Fretado">Petrobras - Fretado</option>
           <option value="Administração">Administração</option>
         </select>
       </div>
@@ -1787,10 +1788,11 @@ function clearFilters() {
 function formatContractName(contrato) {
   const str = String(contrato || '').trim();
   if (!str) return '';
-  // Se for código com traço (ex: "206 - Cajamar" ou "618 - Indaiatuba")
+  // Se for código com traço (ex: "206 - Cajamar", "618 - Indaiatuba" ou "Petrobras - VT")
   return str.split('-').map(part => {
     const p = part.trim();
     if (/^\d+$/.test(p)) return p; // Mantém número como está (ex: 206, 618)
+    if (p.toUpperCase() === 'VT') return 'VT';
     return p.toLowerCase().replace(/(?:^|\s)\S/g, a => a.toUpperCase());
   }).join(' - ');
 }
@@ -2117,7 +2119,8 @@ async function generateCandidateLocalPDF(token, nome) {
     const vaga = cand ? cand.vaga : '';
     const vagaLower = (vaga || '').toLowerCase();
     const hasHealthPlan = vagaLower.includes('1268') || vagaLower.includes('158') || vagaLower.includes('salvador') || vagaLower.includes('teca');
-    const isIndaiatuba = vagaLower.includes('618') || vagaLower.includes('indaiatuba');
+    const isFretado = vagaLower.includes('618') || vagaLower.includes('indaiatuba') || vagaLower.includes('fretado');
+    const isIndaiatuba = isFretado;
     const hasVT = true;
 
     // Mapeamento das chaves da planilha para a estrutura do PDF
@@ -2336,7 +2339,7 @@ async function generateCandidateLocalPDF(token, nome) {
     y += 13.0;
 
     // 6. BENEFÍCIOS - VALE TRANSPORTE / TRANSPORTE FRETADO
-    if (isIndaiatuba) {
+    if (isFretado) {
       drawSectionHeader("Benefícios — Transporte Fretado");
 
       drawField("OPTANTE PELO TRANSPORTE FRETADO?", formData.optanteVT, marginX, printableWidth);

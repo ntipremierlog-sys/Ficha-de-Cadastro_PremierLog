@@ -222,8 +222,9 @@
       const [vaga, setVaga] = useState('');
       const vagaLower = (vaga || '').toLowerCase();
       const hasHealthPlan = !token || vagaLower.includes('1268') || vagaLower.includes('158') || vagaLower.includes('salvador') || vagaLower.includes('teca');
-      // Contrato 618 - Indaiatuba oferece Transporte Fretado devido à localidade de difícil acesso
-      const isIndaiatuba = vagaLower.includes('618') || vagaLower.includes('indaiatuba');
+      // Contratos com Transporte Fretado (ex: 618 - Indaiatuba, Petrobras - Fretado)
+      const isFretado = vagaLower.includes('618') || vagaLower.includes('indaiatuba') || vagaLower.includes('fretado');
+      const isIndaiatuba = isFretado; // Mantém compatibilidade
       const hasVT = true;
       const [isValidatingToken, setIsValidatingToken] = useState(true);
       const [tokenError, setTokenError] = useState(null);
@@ -680,7 +681,7 @@
           y += 13.0;
 
           // 6. BENEFÍCIOS - VALE TRANSPORTE / TRANSPORTE FRETADO
-          if (isIndaiatuba) {
+          if (isFretado) {
             drawSectionHeader("Benefícios — Transporte Fretado");
 
             drawField("OPTANTE PELO TRANSPORTE FRETADO?", formData.optanteVT, marginX, printableWidth);
@@ -1755,11 +1756,11 @@
               <div className="flex items-center gap-3 border-b border-slate-100 pb-3">
                 <div className="w-8 h-8 rounded-lg bg-premier-blue/10 flex items-center justify-center text-premier-blue font-bold text-sm">06</div>
                 <h2 className="text-lg font-bold text-premier-blue">
-                  {isIndaiatuba ? 'Benefícios — Transporte Fretado' : 'Benefícios — Vale Transporte (VT)'}
+                  {isFretado ? 'Benefícios — Transporte Fretado' : 'Benefícios — Vale Transporte (VT)'}
                 </h2>
               </div>
 
-              {isIndaiatuba && (
+              {isFretado && (
                 <div className="relative overflow-hidden bg-gradient-to-r from-amber-500/10 via-amber-500/5 to-transparent border border-amber-300/60 border-l-4 border-l-amber-500 rounded-2xl p-4 md:p-4.5 shadow-sm transition-all duration-300 animate-fade-in">
                   <div className="flex items-start gap-3.5">
                     <div className="w-8 h-8 rounded-xl bg-amber-500/15 border border-amber-500/30 flex items-center justify-center text-amber-700 shrink-0 mt-0.5 shadow-sm">
@@ -1780,10 +1781,10 @@
               <div className="grid grid-cols-1 gap-6">
                 <div>
                   <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">
-                    {isIndaiatuba ? 'Optante pelo Transporte Fretado?' : 'Optante pelo Vale Transporte?'}
+                    {isFretado ? 'Optante pelo Transporte Fretado?' : 'Optante pelo Vale Transporte?'}
                   </label>
                   <PillSelector
-                    options={isIndaiatuba ? [
+                    options={isFretado ? [
                       { label: 'Sim, desejo utilizar o Fretado', value: 'Sim' },
                       { label: 'Não desejo utilizar o Fretado', value: 'Não' }
                     ] : [
@@ -1817,11 +1818,11 @@
                     </div>
                     <div>
                       <span className="font-bold block mb-1">
-                        {isIndaiatuba
+                        {isFretado
                           ? (formData.optanteVT === 'Sim' ? 'Opção selecionada: Desejo utilizar o Transporte Fretado' : 'Opção selecionada: Não desejo utilizar o Transporte Fretado')
                           : (formData.optanteVT === 'Sim' ? 'Opção selecionada: Desejo receber o VT' : 'Opção selecionada: Não desejo receber o VT')}
                       </span>
-                      {isIndaiatuba ? (
+                      {isFretado ? (
                         formData.optanteVT === 'Sim' ? (
                           <p>
                             Ao optar pelo transporte fretado, você utilizará a rota com embarque e desembarque no ponto pré-estabelecido pelo RH. Haverá o desconto regulamentar em folha de pagamento de até <strong>6% do seu salário base mensal</strong>, conforme o Art. 9º do Decreto nº 95.247/1987 e legislação trabalhista (CLT). <strong>Esta opção constará no seu contrato de trabalho.</strong>
@@ -1848,7 +1849,7 @@
 
                 <div className="bg-slate-50 border border-slate-100 rounded-2xl p-4 text-xs text-slate-500 leading-relaxed italic">
                   <span className="font-bold text-premier-blue not-italic block mb-0.5">Informação Legal:</span>
-                  {isIndaiatuba
+                  {isFretado
                     ? 'Conforme disposto na Lei nº 7.418/1985 e no Art. 9º do Decreto nº 95.247/1987, o fornecimento de transporte próprio/fretado pelo empregador para localidade de difícil acesso autoriza o desconto de até 6% do salário base do empregado beneficiado.'
                     : 'Conforme art. 9º do Decreto nº 95.247/1987, o desconto referente ao VT é de até 6% do salário base do colaborador, descontado em folha mensalmente.'}
                 </div>
@@ -2231,7 +2232,7 @@
                   </div>
                   <div>
                     <h3 className="text-base font-extrabold text-premier-blue uppercase tracking-wider font-sans">
-                      {isIndaiatuba ? 'Confirmação — Transporte Fretado' : 'Confirmação — Vale Transporte'}
+                      {isFretado ? 'Confirmação — Transporte Fretado' : 'Confirmação — Vale Transporte'}
                     </h3>
                     <p className="text-slate-400 text-xs mt-0.5">Por favor, leia atentamente as informações abaixo</p>
                   </div>
@@ -2241,10 +2242,10 @@
                   {vtModal.option === 'Sim' ? (
                     <>
                       <p className="font-semibold text-slate-800">
-                        {isIndaiatuba ? 'Você optou por UTILIZAR o Transporte Fretado.' : 'Você optou por RECEBER o Vale Transporte.'}
+                        {isFretado ? 'Você optou por UTILIZAR o Transporte Fretado.' : 'Você optou por RECEBER o Vale Transporte.'}
                       </p>
                       <p>
-                        {isIndaiatuba
+                        {isFretado
                           ? 'A empresa disponibilizará o transporte fretado em rota fixa. O ponto de embarque e desembarque correspondente será informado pelo RH com base no seu endereço.'
                           : 'A empresa fornecerá o benefício correspondente ao seu deslocamento diário residência-trabalho-residência.'}
                       </p>
@@ -2252,16 +2253,16 @@
                         Conforme a legislação vigente (Art. 9º do Decreto nº 95.247/1987 e CLT), haverá o desconto regulamentar em sua folha de pagamento de até <strong>6% do seu salário base mensal</strong>.
                       </p>
                       <div className="bg-blue-50/50 border border-blue-100 rounded-2xl p-4 text-xs text-blue-800 font-medium">
-                        ⚠️ <strong>Importante:</strong> Esta decisão de adesão ao {isIndaiatuba ? 'Transporte Fretado' : 'Vale Transporte'} constará no seu <strong>contrato de trabalho</strong>.
+                        ⚠️ <strong>Importante:</strong> Esta decisão de adesão ao {isFretado ? 'Transporte Fretado' : 'Vale Transporte'} constará no seu <strong>contrato de trabalho</strong>.
                       </div>
                     </>
                   ) : (
                     <>
                       <p className="font-semibold text-slate-800">
-                        {isIndaiatuba ? 'Você optou por NÃO UTILIZAR o Transporte Fretado.' : 'Você optou por NÃO RECEBER o Vale Transporte.'}
+                        {isFretado ? 'Você optou por NÃO UTILIZAR o Transporte Fretado.' : 'Você optou por NÃO RECEBER o Vale Transporte.'}
                       </p>
                       <p>
-                        {isIndaiatuba
+                        {isFretado
                           ? 'Ao declinar o transporte fretado, você declara que utilizará meios próprios de locomoção para o deslocamento ao trabalho.'
                           : 'Ao declinar o benefício, você declara sob as penas da lei que utiliza meios próprios de locomoção ou que não necessita de transporte público para o trajeto residência-trabalho-residência.'}
                       </p>
