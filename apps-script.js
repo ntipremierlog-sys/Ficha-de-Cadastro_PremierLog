@@ -778,12 +778,10 @@ function resetCandidateStatus(token, secret) {
 function cleanTestResponses(secret) {
   if (secret !== CONFIG.ADMIN_SECRET) return { error: 'Não autorizado' };
   var ss = SpreadsheetApp.openById(CONFIG.SPREADSHEET_ID);
-  var rs = ss.getSheetByName(SHEET_RESPONSES);
-  if (!rs) return { success: true, message: 'Aba Respostas não encontrada' };
   
-  var data = rs.getDataRange().getValues();
-  var deletedCount = 0;
-  var namesToRemove = [
+  var tokensOrNamesToRemove = [
+    'sRKUjkPyjfANS6HwThnYja',
+    'sRKUjk',
     'geovanna correia andrade',
     'ademir do nascimento santana',
     'geovanna c andrade',
@@ -797,20 +795,47 @@ function cleanTestResponses(secret) {
     'teste log pdfteste automatizado pdf'
   ];
   
-  for (var i = data.length - 1; i >= 1; i--) {
-    var nameInRow = String(data[i][2] || '').toLowerCase().trim(); // NomeCandidato
-    var fullNameInRow = String(data[i][3] || '').toLowerCase().trim(); // NomeCompleto
-    
-    var shouldDelete = namesToRemove.some(function(name) {
-      return nameInRow.indexOf(name) !== -1 || fullNameInRow.indexOf(name) !== -1;
-    });
-    
-    if (shouldDelete) {
-      rs.deleteRow(i + 1);
-      deletedCount++;
+  var deletedFromResponses = 0;
+  var deletedFromCandidates = 0;
+  
+  // 1. Limpar da aba Respostas
+  var rs = ss.getSheetByName(SHEET_RESPONSES);
+  if (rs) {
+    var rData = rs.getDataRange().getValues();
+    for (var i = rData.length - 1; i >= 1; i--) {
+      var rowStr = rData[i].join(' ').toLowerCase();
+      var shouldDelete = tokensOrNamesToRemove.some(function(item) {
+        return rowStr.indexOf(item.toLowerCase()) !== -1;
+      });
+      if (shouldDelete) {
+        rs.deleteRow(i + 1);
+        deletedFromResponses++;
+      }
     }
   }
-  return { success: true, deletedCount: deletedCount };
+  
+  // 2. Limpar da aba Candidatos
+  var cs = ss.getSheetByName(SHEET_CANDIDATES);
+  if (cs) {
+    var cData = cs.getDataRange().getValues();
+    for (var j = cData.length - 1; j >= 1; j--) {
+      var cRowStr = cData[j].join(' ').toLowerCase();
+      var shouldDeleteC = tokensOrNamesToRemove.some(function(item) {
+        return cRowStr.indexOf(item.toLowerCase()) !== -1;
+      });
+      if (shouldDeleteC) {
+        cs.deleteRow(j + 1);
+        deletedFromCandidates++;
+      }
+    }
+  }
+  
+  return { 
+    success: true, 
+    deletedFromResponses: deletedFromResponses,
+    deletedFromCandidates: deletedFromCandidates,
+    message: 'Removidos ' + deletedFromCandidates + ' candidato(s) e ' + deletedFromResponses + ' resposta(s) de teste.'
+  };
 }
 
 // ============================================================
