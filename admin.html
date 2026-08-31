@@ -2119,7 +2119,7 @@ async function generateCandidateLocalPDF(token, nome) {
     const vaga = cand ? cand.vaga : '';
     const vagaLower = (vaga || '').toLowerCase();
     const hasHealthPlan = vagaLower.includes('1268') || vagaLower.includes('158') || vagaLower.includes('salvador') || vagaLower.includes('teca');
-    const isFretado = vagaLower.includes('618') || vagaLower.includes('indaiatuba') || vagaLower.includes('fretado');
+    const isFretado = vagaLower.includes('618') || vagaLower.includes('indaiatuba') || vagaLower.includes('fretado') || (vagaLower.includes('petrobras') && !vagaLower.includes('vt'));
     const isIndaiatuba = isFretado;
     const hasVT = true;
 

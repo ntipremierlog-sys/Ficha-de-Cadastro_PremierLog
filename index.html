@@ -102,8 +102,13 @@
       const funcao = vagaStr.substring(0, idx).trim();
       const contrato = vagaStr.substring(idx + 3).trim();
       
-      // Format first letter uppercase, rest lowercase
-      const formattedContrato = contrato.toLowerCase().replace(/(?:^|\s|-)\S/g, function(a) { return a.toUpperCase(); });
+      // Preserva números e siglas como VT, capitaliza o restante
+      const formattedContrato = contrato.split('-').map(part => {
+        const p = part.trim();
+        if (/^\d+$/.test(p)) return p;
+        if (p.toUpperCase() === 'VT') return 'VT';
+        return p.toLowerCase().replace(/(?:^|\s)\S/g, a => a.toUpperCase());
+      }).join(' - ');
       return `${funcao} - ${formattedContrato}`;
     }
 
@@ -222,8 +227,8 @@
       const [vaga, setVaga] = useState('');
       const vagaLower = (vaga || '').toLowerCase();
       const hasHealthPlan = !token || vagaLower.includes('1268') || vagaLower.includes('158') || vagaLower.includes('salvador') || vagaLower.includes('teca');
-      // Contratos com Transporte Fretado (ex: 618 - Indaiatuba, Petrobras - Fretado)
-      const isFretado = vagaLower.includes('618') || vagaLower.includes('indaiatuba') || vagaLower.includes('fretado');
+      // Contratos com Transporte Fretado (ex: 618 - Indaiatuba, Petrobras, Petrobras - Fretado)
+      const isFretado = vagaLower.includes('618') || vagaLower.includes('indaiatuba') || vagaLower.includes('fretado') || (vagaLower.includes('petrobras') && !vagaLower.includes('vt'));
       const isIndaiatuba = isFretado; // Mantém compatibilidade
       const hasVT = true;
       const [isValidatingToken, setIsValidatingToken] = useState(true);
