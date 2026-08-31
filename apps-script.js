@@ -409,30 +409,87 @@ function submitForm(data) {
       return (d.nome || '') + ' | CPF: ' + (d.cpf || '') + ' | Parentesco: ' + (d.parentesco || '');
     }).join(' ;; ');
 
-    var rowData = [
-      token, now, candidateName,
-      fd.nomeCompleto || '', fd.nomeSocial || '',
-      fd.cpf || '', fd.rg || '',
-      fd.endereco || '', fd.bairroCidade || '', fd.cep || '',
-      fd.whatsapp || '', fd.email || '',
-      fd.contatoEmergenciaNome || '', fd.contatoEmergenciaTelefone || '',
-      fd.tituloEleitor || '', fd.grauInstrucao || '',
-      fd.possuiFilhos || '', fd.quantosFilhos || '',
-      fd.declararDependenteIR || '', fd.quantosDependentesIR || '', depIR,
-      fd.estadoCivil || '', fd.estadoCivilOutro || '',
-      fd.botaNumero || '', fd.camisaTamanho || '', fd.calcaTamanho || '',
-      fd.optanteVT || '', fd.planoSaudeOpcao || '',
-      fd.dependente1Nome || '', fd.dependente1Cpf || '',
-      fd.dependente2Nome || '', fd.dependente2Cpf || '',
-      fd.tipoAssinatura || '', pdfUrl
-    ];
+    // Mapeamento dinâmico de campos pelo cabeçalho da planilha
+    var headerRow = rSheet.getRange(1, 1, 1, rSheet.getLastColumn()).getValues()[0];
+    var fieldMap = {
+      'token': token,
+      'datapreenchimento': now,
+      'nomecandidato': candidateName,
+      'nomecompleto': fd.nomeCompleto || '',
+      'nomesocial': fd.nomeSocial || '',
+      'cpf': fd.cpf || '',
+      'rg': fd.rg || '',
+      'raçacor': fd.racaCor || '',
+      'racacor': fd.racaCor || '',
+      'raça / cor': fd.racaCor || '',
+      'raca / cor': fd.racaCor || '',
+      'endereço': fd.endereco || '',
+      'endereco': fd.endereco || '',
+      'bairrocidade': fd.bairroCidade || '',
+      'cep': fd.cep || '',
+      'whatsapp': fd.whatsapp || '',
+      'email': fd.email || '',
+      'emergencianome': fd.contatoEmergenciaNome || '',
+      'emergenciatel': fd.contatoEmergenciaTelefone || '',
+      'títuloeleitor': fd.tituloEleitor || '',
+      'tituloeleitor': fd.tituloEleitor || '',
+      'grauinstrução': fd.grauInstrucao || '',
+      'grauinstrucao': fd.grauInstrucao || '',
+      'possuifilhos': fd.possuiFilhos || '',
+      'qtdfilhos': fd.quantosFilhos || '',
+      'declararir': fd.declararDependenteIR || '',
+      'qtddepir': fd.quantosDependentesIR || '',
+      'dependentesir': depIR,
+      'estadocivil': fd.estadoCivil || '',
+      'estadociviloutro': fd.estadoCivilOutro || '',
+      'númerobota': fd.botaNumero || '',
+      'numerobota': fd.botaNumero || '',
+      'tamanhocamisa': fd.camisaTamanho || '',
+      'tamanhocalça': fd.calcaTamanho || '',
+      'tamanhocalca': fd.calcaTamanho || '',
+      'optantevt': fd.optanteVT || '',
+      'planosaúde': fd.planoSaudeOpcao || '',
+      'planosaude': fd.planoSaudeOpcao || '',
+      'dep1nome': fd.dependente1Nome || '',
+      'dep1cpf': fd.dependente1Cpf || '',
+      'dep2nome': fd.dependente2Nome || '',
+      'dep2cpf': fd.dependente2Cpf || '',
+      'tipoassinatura': fd.tipoAssinatura || '',
+      'pdfurl': pdfUrl
+    };
+
+    var rowData = headerRow.map(function(header) {
+      var key = String(header || '').toLowerCase().trim();
+      return fieldMap.hasOwnProperty(key) ? fieldMap[key] : '';
+    });
+
+    // Se a planilha não tiver cabeçalhos, usa array padrão
+    if (rowData.length === 0) {
+      rowData = [
+        token, now, candidateName,
+        fd.nomeCompleto || '', fd.nomeSocial || '',
+        fd.cpf || '', fd.rg || '',
+        fd.racaCor || '',
+        fd.endereco || '', fd.bairroCidade || '', fd.cep || '',
+        fd.whatsapp || '', fd.email || '',
+        fd.contatoEmergenciaNome || '', fd.contatoEmergenciaTelefone || '',
+        fd.tituloEleitor || '', fd.grauInstrucao || '',
+        fd.possuiFilhos || '', fd.quantosFilhos || '',
+        fd.declararDependenteIR || '', fd.quantosDependentesIR || '', depIR,
+        fd.estadoCivil || '', fd.estadoCivilOutro || '',
+        fd.botaNumero || '', fd.camisaTamanho || '', fd.calcaTamanho || '',
+        fd.optanteVT || '', fd.planoSaudeOpcao || '',
+        fd.dependente1Nome || '', fd.dependente1Cpf || '',
+        fd.dependente2Nome || '', fd.dependente2Cpf || '',
+        fd.tipoAssinatura || '', pdfUrl
+      ];
+    }
 
     // Retry até 3 tentativas no appendRow
     var respostaSalva = false;
     var respostaErro  = '';
     for (var tentativa = 1; tentativa <= 3; tentativa++) {
       try {
-        var rSheet = ss.getSheetByName(SHEET_RESPONSES);
         rSheet.appendRow(rowData);
         SpreadsheetApp.flush();
         respostaSalva = true;
@@ -644,12 +701,38 @@ function ensureSheets() {
   if (!rs) rs = ss.insertSheet(SHEET_RESPONSES);
   if (rs.getLastRow() === 0) {
     rs.appendRow(['Token','DataPreenchimento','NomeCandidato','NomeCompleto','NomeSocial','CPF','RG',
-      'Endereço','BairroCidade','CEP','WhatsApp','Email','EmergenciaNome','EmergenciaTel',
+      'RaçaCor','Endereço','BairroCidade','CEP','WhatsApp','Email','EmergenciaNome','EmergenciaTel',
       'TítuloEleitor','GrauInstrução','PossuiFilhos','QtdFilhos','DeclararIR','QtdDepIR',
       'DependentesIR','EstadoCivil','EstadoCivilOutro','NúmeroBota','TamanhoCamisa',
       'TamanhoCalça','OptanteVT','PlanoSaúde','Dep1Nome','Dep1CPF','Dep2Nome','Dep2CPF','TipoAssinatura','PDFUrl']);
     rs.setFrozenRows(1);
     rs.getRange('1:1').setFontWeight('bold').setBackground('#211551').setFontColor('white');
+  } else {
+    // Garante que a coluna RaçaCor exista no cabeçalho se a planilha já foi criada anteriormente
+    try {
+      var lastCol = rs.getLastColumn();
+      if (lastCol > 0) {
+        var rHeaders = rs.getRange(1, 1, 1, lastCol).getValues()[0];
+        var hasRaca = rHeaders.some(function(h) { 
+          var k = String(h || '').toLowerCase();
+          return k.indexOf('raça') !== -1 || k.indexOf('raca') !== -1;
+        });
+        if (!hasRaca) {
+          var rgIdx = -1;
+          for (var c = 0; c < rHeaders.length; c++) {
+            if (String(rHeaders[c]).toUpperCase() === 'RG') { rgIdx = c + 1; break; }
+          }
+          if (rgIdx !== -1) {
+            rs.insertColumnAfter(rgIdx);
+            rs.getRange(1, rgIdx + 1).setValue('RaçaCor').setFontWeight('bold').setBackground('#211551').setFontColor('white');
+          } else {
+            rs.getRange(1, lastCol + 1).setValue('RaçaCor').setFontWeight('bold').setBackground('#211551').setFontColor('white');
+          }
+        }
+      }
+    } catch(e) {
+      Logger.log('Erro ao checar coluna RaçaCor: ' + e.message);
+    }
   }
 
   // Aba de log de erros de submissão (criada automaticamente se não existir)
