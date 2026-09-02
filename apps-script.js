@@ -1190,3 +1190,111 @@ function executarAuditoriaFiltrada() {
   Logger.log('🟡 Fechados em massa sem ter preenchido (não são bug): ' + fechadosEmMassa.length);
   Logger.log('==================================');
 }
+
+// ============================================================
+// FUNÇÃO: Reenviar e-mails para candidatos Pendentes por período
+// Busca todos os candidatos com status "Pendente" cujo DataEnvio
+// está entre dataInicio e dataFim e reenvia o e-mail de convite.
+//
+// ⚠️  COMO USAR:
+//   1. Ajuste as datas em reenviarEmailsPorData() abaixo
+//   2. Execute: Executar → reenviarEmailsPorData
+//
+// Datas no formato 'DD/MM/YYYY' (ex: '31/08/2026')
+// ============================================================
+function reenviarEmailsPorData() {
+  // ⚠️ Ajuste o período desejado (inclusive):
+  var DATA_INICIO = '31/08/2026';
+  var DATA_FIM    = '01/09/2026';
+
+  _reenviarPorPeriodo(DATA_INICIO, DATA_FIM);
+}
+
+function _reenviarPorPeriodo(dataInicioStr, dataFimStr) {
+  Logger.log('======= REENVIO EM MASSA POR PERÍODO =======');
+  Logger.log('Período: ' + dataInicioStr + ' até ' + dataFimStr);
+
+  // Converte 'DD/MM/YYYY' para Date (início do dia / fim do dia)
+  function parseDMY(str, endOfDay) {
+    var p = str.split('/');
+    if (p.length !== 3) return null;
+    var d = new Date(parseInt(p[2]), parseInt(p[1]) - 1, parseInt(p[0]),
+                     endOfDay ? 23 : 0, endOfDay ? 59 : 0, endOfDay ? 59 : 0);
+    return isNaN(d.getTime()) ? null : d;
+  }
+
+  var inicio = parseDMY(dataInicioStr, false);
+  var fim    = parseDMY(dataFimStr,    true);
+
+  if (!inicio || !fim) {
+    Logger.log('❌ Datas inválidas. Use o formato DD/MM/YYYY.');
+    return;
+  }
+
+  ensureSheets();
+  var ss    = SpreadsheetApp.openById(CONFIG.SPREADSHEET_ID);
+  var sheet = ss.getSheetByName(SHEET_CANDIDATES);
+  var data  = sheet.getDataRange().getValues();
+
+  var enviados  = 0;
+  var ignorados = 0;
+  var erros     = [];
+
+  for (var i = 1; i < data.length; i++) {
+    var status    = String(data[i][5] || '').trim();
+    var nome      = String(data[i][1] || '').trim();
+    var email     = String(data[i][2] || '').trim();
+    var vaga      = String(data[i][3] || '').trim();
+    var token     = String(data[i][4] || '').trim();
+    var dataEnvio = data[i][6];
+
+    // Só processa candidatos Pendentes com e-mail
+    if (status !== 'Pendente' || !email || !token) { ignorados++; continue; }
+
+    // Parsear dataEnvio
+    var envioDate = null;
+    if (dataEnvio instanceof Date) {
+      envioDate = dataEnvio;
+    } else if (typeof dataEnvio === 'string' && dataEnvio.trim() !== '') {
+      var iso = dataEnvio.trim();
+      // Tentar 'dd/MM/yyyy HH:mm'
+      var m = iso.match(/^(\d{2})\/(\d{2})\/(\d{4})\s+(\d{2}):(\d{2})/);
+      if (m) {
+        envioDate = new Date(parseInt(m[3]), parseInt(m[2]) - 1, parseInt(m[1]),
+                             parseInt(m[4]), parseInt(m[5]));
+      } else {
+        envioDate = new Date(iso);
+      }
+    } else if (typeof dataEnvio === 'number') {
+      envioDate = new Date((dataEnvio - 25569) * 86400 * 1000);
+    }
+
+    if (!envioDate || isNaN(envioDate.getTime())) { ignorados++; continue; }
+
+    // Verifica se está no período
+    if (envioDate < inicio || envioDate > fim) { ignorados++; continue; }
+
+    // Reenviar e-mail
+    try {
+      var formUrl = CONFIG.FORM_URL + '?token=' + token;
+      sendCandidateEmail(nome, email, token, vaga, formUrl);
+      enviados++;
+      Logger.log('📧 Reenviado: ' + nome + ' <' + email + '> | Envio original: ' + envioDate.toLocaleDateString('pt-BR'));
+      // Pausa para não exceder cota de e-mail do Google (100/dia para contas gratuitas)
+      if (enviados % 10 === 0) Utilities.sleep(1000);
+    } catch (err) {
+      erros.push(nome + ' (' + email + '): ' + err.message);
+      Logger.log('❌ Erro ao reenviar para ' + nome + ': ' + err.message);
+    }
+  }
+
+  Logger.log('');
+  Logger.log('=== RESULTADO ===');
+  Logger.log('✅ E-mails reenviados: ' + enviados);
+  Logger.log('⏭️  Ignorados (já Concluído, sem e-mail ou fora do período): ' + ignorados);
+  Logger.log('❌ Erros: ' + erros.length);
+  if (erros.length > 0) Logger.log('Detalhes dos erros: ' + JSON.stringify(erros));
+  Logger.log('=================================');
+
+  return { enviados: enviados, ignorados: ignorados, erros: erros };
+}
