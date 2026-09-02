@@ -514,7 +514,15 @@
         const day = date.getDate();
         const month = months[date.getMonth()];
         const year = date.getFullYear();
-        return `Salvador, ${day} de ${month} de ${year}`;
+        // Hora no fuso horário de Brasília (UTC-3) para validade jurídica
+        const horaStr = date.toLocaleTimeString('pt-BR', {
+          timeZone: 'America/Sao_Paulo',
+          hour: '2-digit',
+          minute: '2-digit',
+          second: '2-digit',
+          hour12: false
+        });
+        return `Salvador, ${day} de ${month} de ${year} — ${horaStr} (horário de Brasília)`;
       };
 
       const generatePDF = async () => {
@@ -840,7 +848,7 @@
           const formattedDate = getFormattedDateInPortuguese();
 
           doc.setFont("helvetica", "normal");
-          doc.setFontSize(8.5);
+          doc.setFontSize(7.5);
           doc.setTextColor(31, 41, 55);
           doc.text(formattedDate, marginX + printableWidth / 2, y, { align: "center" });
 
