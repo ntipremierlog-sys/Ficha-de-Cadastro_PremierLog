@@ -307,9 +307,9 @@ function getAllResponses(secret) {
 
 // ============================================================
 // FUNÇÃO: Salvar Formulário (candidato)
-// CORRIGIDO: LockService (escopo reduzido) + nova ordem + retry + log de erros
-// O lock cobre APENAS as operações de planilha (rápidas).
+// CORRIGIDO: rSheet declarada corretamente + lock único robusto
 // O PDF é gerado FORA do lock para não bloquear submissões simultâneas.
+// Não usar return dentro de try...finally com lock ativo.
 // ============================================================
 function submitForm(data) {
   var token = data.token;
@@ -321,7 +321,8 @@ function submitForm(data) {
 
   // ============================================================
   // LOCK ESCOPO 1: verificar status e reservar o token
-  // Lock curto — apenas leitura + marcação de reserva.
+  // Lock curto — apenas leitura do candidato.
+  // Não usar return dentro do try para evitar estados inconsistentes.
   // ============================================================
   var lock = LockService.getScriptLock();
   var lockObtido = false;
@@ -334,23 +335,25 @@ function submitForm(data) {
     };
   }
 
-  var candidateName  = '';
-  var candidateRow   = -1;
-  var candidateEmail = '';
-  var now            = formatDate(new Date());
+  var candidateName    = '';
+  var candidateRow     = -1;
+  var candidateEmail   = '';
+  var now              = formatDate(new Date());
+  var alreadySubmitted = false; // flag: não usar return dentro do try com lock
 
   try {
-    var cData = cSheet.getDataRange().getValues();
+    var cData    = cSheet.getDataRange().getValues();
     var reqToken = String(token || '').trim();
 
     for (var i = 1; i < cData.length; i++) {
       if (String(cData[i][4] || '').trim() === reqToken) {
         if (String(cData[i][5] || '').trim() === 'Concluído') {
-          return { error: 'Formulário já preenchido anteriormente.' };
+          alreadySubmitted = true; // ✅ flag em vez de return direto
+        } else {
+          candidateName  = cData[i][1];
+          candidateEmail = cData[i][2] || '';
+          candidateRow   = i + 1;
         }
-        candidateName  = cData[i][1];
-        candidateEmail = cData[i][2] || '';
-        candidateRow   = i + 1;
         break;
       }
     }
@@ -359,6 +362,10 @@ function submitForm(data) {
     try { lock.releaseLock(); } catch(e) {}
   }
 
+  // Verificações pós-lock (sem lock ativo — seguro usar return aqui)
+  if (alreadySubmitted) {
+    return { error: 'Formulário já preenchido anteriormente.' };
+  }
   if (candidateRow === -1) {
     return { error: 'Token não encontrado. O link pode ser inválido ou expirado.' };
   }
@@ -389,7 +396,7 @@ function submitForm(data) {
 
   // ============================================================
   // LOCK ESCOPO 2: gravar dados na planilha (appendRow + status)
-  // Segundo lock curto — apenas escritas na planilha.
+  // Lock curto — apenas escritas na planilha de Respostas e Candidatos.
   // ============================================================
   var lock2 = LockService.getScriptLock();
   var lock2Obtido = false;
@@ -404,6 +411,17 @@ function submitForm(data) {
   }
 
   try {
+    // ✅ FIX CRÍTICO: rSheet declarada aqui — era a causa raiz do bug
+    var rSheet = ss.getSheetByName(SHEET_RESPONSES);
+    if (!rSheet) {
+      ensureSheets();
+      rSheet = ss.getSheetByName(SHEET_RESPONSES);
+    }
+    if (!rSheet) {
+      _registrarErro(ss, token, candidateName, 'SHEET_RESPOSTAS_NAOEXISTE', 'Aba Respostas não encontrada após ensureSheets');
+      return { error: 'Planilha de respostas não encontrada. Contate o RH.' };
+    }
+
     var fd    = data.formData || {};
     var depIR = (fd.dependentesIR || []).map(function(d) {
       return (d.nome || '') + ' | CPF: ' + (d.cpf || '') + ' | Parentesco: ' + (d.parentesco || '');
