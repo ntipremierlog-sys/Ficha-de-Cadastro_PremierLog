@@ -1131,6 +1131,7 @@
           <option value="778 - Guarulhos">778 - Guarulhos</option>
           <option value="618 - INDAIATUBA (CTCE)">618 - INDAIATUBA (CTCE)</option>
           <option value="618 - INDAIATUBA (Unidades)">618 - INDAIATUBA (Unidades)</option>
+          <option value="618 - Indaiatuba (Sorocaba / Vinhedo)">618 - Indaiatuba (Sorocaba / Vinhedo)</option>
           <option value="Petrobras - VT">Petrobras - VT</option>
           <option value="Petrobras - Fretado">Petrobras - Fretado</option>
           <option value="Administração">Administração</option>
@@ -2121,7 +2122,8 @@ async function generateCandidateLocalPDF(token, nome) {
     const vaga = cand ? cand.vaga : '';
     const vagaLower = (vaga || '').toLowerCase();
     const hasHealthPlan = vagaLower.includes('1268') || vagaLower.includes('158') || vagaLower.includes('salvador') || vagaLower.includes('teca');
-    const isFretado = ((vagaLower.includes('618') || vagaLower.includes('indaiatuba')) && !vagaLower.includes('unidades')) || vagaLower.includes('ctce') || vagaLower.includes('fretado') || (vagaLower.includes('petrobras') && !vagaLower.includes('vt'));
+    const isSorocabaVinhedo = vagaLower.includes('sorocaba') || vagaLower.includes('vinhedo');
+    const isFretado = ((vagaLower.includes('618') || vagaLower.includes('indaiatuba')) && !vagaLower.includes('unidades') && !isSorocabaVinhedo) || vagaLower.includes('ctce') || vagaLower.includes('fretado') || (vagaLower.includes('petrobras') && !vagaLower.includes('vt'));
     const isIndaiatuba = isFretado;
     const hasVT = true;
 

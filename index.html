@@ -227,8 +227,9 @@
       const [vaga, setVaga] = useState('');
       const vagaLower = (vaga || '').toLowerCase();
       const hasHealthPlan = !token || vagaLower.includes('1268') || vagaLower.includes('158') || vagaLower.includes('salvador') || vagaLower.includes('teca');
+      const isSorocabaVinhedo = vagaLower.includes('sorocaba') || vagaLower.includes('vinhedo');
       // Contratos com Transporte Fretado (ex: 618 - INDAIATUBA (CTCE), Petrobras, Petrobras - Fretado)
-      const isFretado = ((vagaLower.includes('618') || vagaLower.includes('indaiatuba')) && !vagaLower.includes('unidades')) || vagaLower.includes('ctce') || vagaLower.includes('fretado') || (vagaLower.includes('petrobras') && !vagaLower.includes('vt'));
+      const isFretado = ((vagaLower.includes('618') || vagaLower.includes('indaiatuba')) && !vagaLower.includes('unidades') && !isSorocabaVinhedo) || vagaLower.includes('ctce') || vagaLower.includes('fretado') || (vagaLower.includes('petrobras') && !vagaLower.includes('vt'));
       const isIndaiatuba = isFretado; // Mantém compatibilidade
       const hasVT = true;
       const [isValidatingToken, setIsValidatingToken] = useState(true);
@@ -2078,7 +2079,11 @@
                       Informamos que a formalização do seu <strong>Contrato de Trabalho</strong> será realizada por meio de <strong>assinatura eletrônica</strong>, com pleno valor legal. O documento será enviado para o seu aplicativo <strong>WhatsApp</strong> no número de celular informado nesta ficha.
                     </p>
                     <p className="text-slate-600">
-                      Por isso, no momento da assinatura do contrato e/ou integração, é <strong>indispensável ter em mãos o seu smartphone pessoal</strong>, devidamente carregado e com o aplicativo WhatsApp habilitado para concluir a assinatura do documento.
+                      {isSorocabaVinhedo ? (
+                        <>Por isso, no momento da assinatura do contrato e/ou integração, é <strong>indispensável ter em mãos o seu smartphone pessoal</strong>, devidamente carregado e com o aplicativo WhatsApp habilitado para concluir a assinatura do documento.</>
+                      ) : (
+                        <>Por isso, no momento da assinatura do contrato que ocorrerá durante a integração, é <strong>indispensável ter em mãos o seu smartphone pessoal</strong>, devidamente carregado e com o aplicativo WhatsApp habilitado para concluir a assinatura do documento.</>
+                      )}
                     </p>
                   </div>
                 </div>
