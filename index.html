@@ -213,6 +213,7 @@
         assinaturaDigitada: '',
         tipoAssinatura: 'texto',
         declaracaoAceite: false,
+        comunicadoWhatsappAceite: false,
         pcdDeclaracao: '',
         necessitaRecursoAcessibilidade: '',
         recursoAcessibilidadeDescricao: ''
@@ -454,6 +455,9 @@
         if (!formData.botaNumero.trim()) newErrors.botaNumero = "Tamanho da bota é obrigatório.";
         if (!formData.camisaTamanho.trim()) newErrors.camisaTamanho = "Tamanho da camisa é obrigatório.";
         if (!formData.calcaTamanho.trim()) newErrors.calcaTamanho = "Tamanho da calça é obrigatório.";
+        if (!formData.comunicadoWhatsappAceite) {
+          newErrors.comunicadoWhatsappAceite = "É obrigatório confirmar a leitura do comunicado sobre a assinatura via WhatsApp.";
+        }
         if (!formData.declaracaoAceite) newErrors.declaracaoAceite = "É necessário aceitar a declaração final.";
 
         if (formData.tipoAssinatura === 'texto') {
@@ -2059,14 +2063,16 @@
               </div>
 
               {/* COMUNICADO: ASSINATURA DIGITAL DO CONTRATO VIA WHATSAPP */}
-              <div className="relative overflow-hidden bg-gradient-to-r from-emerald-500/10 via-emerald-500/5 to-transparent border border-emerald-300/70 border-l-4 border-l-emerald-600 rounded-2xl p-4 md:p-5 shadow-sm animate-fade-in">
+              <div className={`relative overflow-hidden bg-gradient-to-r from-emerald-500/10 via-emerald-500/5 to-transparent border ${
+                errors.comunicadoWhatsappAceite ? 'border-rose-400 bg-rose-50/25 ring-2 ring-rose-200' : 'border-emerald-300/70'
+              } border-l-4 ${errors.comunicadoWhatsappAceite ? 'border-l-rose-500' : 'border-l-emerald-600'} rounded-2xl p-4 md:p-5 shadow-sm animate-fade-in transition-all duration-300`}>
                 <div className="flex items-start gap-3.5">
-                  <div className="w-9 h-9 rounded-xl bg-emerald-600/15 border border-emerald-600/30 flex items-center justify-center text-emerald-700 shrink-0 mt-0.5 shadow-sm">
+                  <div className={`w-9 h-9 rounded-xl ${errors.comunicadoWhatsappAceite ? 'bg-rose-500/15 border border-rose-500/30 text-rose-700' : 'bg-emerald-600/15 border border-emerald-600/30 text-emerald-700'} flex items-center justify-center shrink-0 mt-0.5 shadow-sm`}>
                     <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
                       <path strokeLinecap="round" strokeLinejoin="round" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z" />
                     </svg>
                   </div>
-                  <div className="space-y-1.5 text-xs leading-relaxed text-slate-700">
+                  <div className="space-y-2 text-xs leading-relaxed text-slate-700 flex-1">
                     <div className="flex items-center gap-2">
                       <span className="font-extrabold text-emerald-950 tracking-wide text-xs uppercase font-sans">
                         Comunicado Importante: Assinatura Digital do Contrato
@@ -2085,11 +2091,61 @@
                         <>Por isso, no momento da assinatura do contrato que ocorrerá durante a integração, é <strong>indispensável ter em mãos o seu smartphone pessoal</strong>, devidamente carregado e com o aplicativo WhatsApp habilitado para concluir a assinatura do documento.</>
                       )}
                     </p>
+
+                    {/* CONFIRMAÇÃO OBRIGATÓRIA DE LEITURA */}
+                    <div className="mt-3.5 pt-3.5 border-t border-emerald-200/70">
+                      <div className="flex items-start gap-2.5">
+                        <input
+                          id="comunicadoWhatsappAceite"
+                          type="checkbox"
+                          checked={formData.comunicadoWhatsappAceite}
+                          onChange={(e) => {
+                            handleInputChange('comunicadoWhatsappAceite', e.target.checked);
+                            if (errors.comunicadoWhatsappAceite) {
+                              setErrors(prev => {
+                                const next = { ...prev };
+                                delete next.comunicadoWhatsappAceite;
+                                return next;
+                              });
+                            }
+                          }}
+                          className="w-5 h-5 accent-emerald-600 border-emerald-300 rounded focus:ring-emerald-600 mt-0.5 cursor-pointer shrink-0"
+                        />
+                        <label htmlFor="comunicadoWhatsappAceite" className="text-xs font-bold text-emerald-950 leading-snug cursor-pointer select-none">
+                          Declaro que li, compreendi e confirmo que estarei com meu smartphone pessoal devidamente habilitado para o recebimento e assinatura digital do contrato via WhatsApp. *
+                        </label>
+                      </div>
+                      {errors.comunicadoWhatsappAceite && (
+                        <p className="text-[11px] text-rose-600 font-bold mt-1.5 flex items-center gap-1.5 pl-7">
+                          <svg className="w-3.5 h-3.5 shrink-0" viewBox="0 0 20 20" fill="currentColor">
+                            <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                          </svg>
+                          {errors.comunicadoWhatsappAceite}
+                        </p>
+                      )}
+                    </div>
                   </div>
                 </div>
               </div>
 
-              <div className="space-y-4">
+              {/* ALERTA DE BLOQUEIO SE NÃO CONFIRMOU A LEITURA */}
+              {!formData.comunicadoWhatsappAceite && (
+                <div className="bg-amber-50/90 border border-amber-200 rounded-2xl p-4 flex items-center gap-3.5 text-xs text-amber-900 font-medium shadow-sm animate-fade-in">
+                  <div className="w-8 h-8 rounded-xl bg-amber-200/70 border border-amber-300/60 flex items-center justify-center text-amber-800 shrink-0">
+                    <svg className="w-4.5 h-4.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.2">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                    </svg>
+                  </div>
+                  <div className="leading-relaxed">
+                    <span className="font-bold block text-amber-950">Etapa obrigatória pendente:</span>
+                    Por favor, leia o comunicado acima e marque a confirmação para desbloquear a declaração final e a área de assinatura.
+                  </div>
+                </div>
+              )}
+
+              <div className={`space-y-4 transition-all duration-300 ${
+                !formData.comunicadoWhatsappAceite ? 'opacity-40 pointer-events-none select-none filter grayscale' : ''
+              }`}>
                 <div className="bg-slate-50 border border-slate-200/60 rounded-2xl p-5 text-sm leading-relaxed text-slate-700 font-medium">
                   "Declaro que as informações acima são verdadeiras e autorizo os descontos em folha de pagamento conforme indicado nesta ficha, nos termos da legislação trabalhista vigente (CLT)."
                 </div>
