@@ -2486,7 +2486,22 @@ async function generateCandidateLocalPDF(token, nome) {
     const declText = "Declaro que as informações acima são verdadeiras e autorizo os descontos em folha de pagamento conforme indicado nesta ficha, nos termos da legislação trabalhista vigente (CLT).";
     const splitDecl = doc.splitTextToSize(declText, printableWidth);
     doc.text(splitDecl, marginX, y);
-    y += splitDecl.length * 3.5 + 15.0;
+    y += splitDecl.length * 3.5 + 4.0;
+
+    // Confirmação de Ciência sobre Contrato Digital / WhatsApp
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(7.0);
+    doc.setTextColor(33, 21, 81);
+    doc.text("CIÊNCIA DA ASSINATURA DIGITAL (WHATSAPP):", marginX, y);
+    y += 3.8;
+
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(6.8);
+    doc.setTextColor(51, 65, 85);
+    const wppDeclText = "[ X ] O candidato confirmou ciência de que a formalização do Contrato de Trabalho ocorrerá por assinatura eletrônica via WhatsApp e comprometeu-se a estar de posse do seu smartphone pessoal habilitado para concluir a assinatura.";
+    const splitWpp = doc.splitTextToSize(wppDeclText, printableWidth);
+    doc.text(splitWpp, marginX, y);
+    y += splitWpp.length * 3.2 + 10.0;
 
     // Date
     const months = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"];
