@@ -227,8 +227,8 @@
       const [vaga, setVaga] = useState('');
       const vagaLower = (vaga || '').toLowerCase();
       const hasHealthPlan = !token || vagaLower.includes('1268') || vagaLower.includes('158') || vagaLower.includes('salvador') || vagaLower.includes('teca');
-      // Contratos com Transporte Fretado (ex: 618 - Indaiatuba, Petrobras, Petrobras - Fretado)
-      const isFretado = vagaLower.includes('618') || vagaLower.includes('indaiatuba') || vagaLower.includes('fretado') || (vagaLower.includes('petrobras') && !vagaLower.includes('vt'));
+      // Contratos com Transporte Fretado (ex: 618 - INDAIATUBA (CTCE), Petrobras, Petrobras - Fretado)
+      const isFretado = ((vagaLower.includes('618') || vagaLower.includes('indaiatuba')) && !vagaLower.includes('unidades')) || vagaLower.includes('ctce') || vagaLower.includes('fretado') || (vagaLower.includes('petrobras') && !vagaLower.includes('vt'));
       const isIndaiatuba = isFretado; // Mantém compatibilidade
       const hasVT = true;
       const [isValidatingToken, setIsValidatingToken] = useState(true);
@@ -2055,6 +2055,33 @@
               <div className="flex items-center gap-3 border-b border-slate-100 pb-3">
                 <div className="w-8 h-8 rounded-lg bg-premier-blue/10 flex items-center justify-center text-premier-blue font-bold text-sm">{hasHealthPlan && hasVT ? '08' : (!hasHealthPlan && !hasVT) ? '06' : '07'}</div>
                 <h2 className="text-lg font-bold text-premier-blue">Declaração Final</h2>
+              </div>
+
+              {/* COMUNICADO: ASSINATURA DIGITAL DO CONTRATO VIA WHATSAPP */}
+              <div className="relative overflow-hidden bg-gradient-to-r from-emerald-500/10 via-emerald-500/5 to-transparent border border-emerald-300/70 border-l-4 border-l-emerald-600 rounded-2xl p-4 md:p-5 shadow-sm animate-fade-in">
+                <div className="flex items-start gap-3.5">
+                  <div className="w-9 h-9 rounded-xl bg-emerald-600/15 border border-emerald-600/30 flex items-center justify-center text-emerald-700 shrink-0 mt-0.5 shadow-sm">
+                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                    </svg>
+                  </div>
+                  <div className="space-y-1.5 text-xs leading-relaxed text-slate-700">
+                    <div className="flex items-center gap-2">
+                      <span className="font-extrabold text-emerald-950 tracking-wide text-xs uppercase font-sans">
+                        Comunicado Importante: Assinatura Digital do Contrato
+                      </span>
+                      <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-bold">
+                        WhatsApp
+                      </span>
+                    </div>
+                    <p className="text-slate-600">
+                      Informamos que a formalização do seu <strong>Contrato de Trabalho</strong> será realizada por meio de <strong>assinatura eletrônica</strong>, com pleno valor legal. O documento será enviado para o seu aplicativo <strong>WhatsApp</strong> no número de celular informado nesta ficha.
+                    </p>
+                    <p className="text-slate-600">
+                      Por isso, no momento da assinatura do contrato e/ou integração, é <strong>indispensável ter em mãos o seu smartphone pessoal</strong>, devidamente carregado e com o aplicativo WhatsApp habilitado para concluir a assinatura do documento.
+                    </p>
+                  </div>
+                </div>
               </div>
 
               <div className="space-y-4">

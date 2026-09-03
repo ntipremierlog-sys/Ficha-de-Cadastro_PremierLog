@@ -1129,7 +1129,8 @@
           <option value="1268 - Salvador">1268 - Salvador</option>
           <option value="158 - Teca Salvador">158 - Teca Salvador</option>
           <option value="778 - Guarulhos">778 - Guarulhos</option>
-          <option value="618 - Indaiatuba">618 - Indaiatuba</option>
+          <option value="618 - INDAIATUBA (CTCE)">618 - INDAIATUBA (CTCE)</option>
+          <option value="618 - INDAIATUBA (Unidades)">618 - INDAIATUBA (Unidades)</option>
           <option value="Petrobras - VT">Petrobras - VT</option>
           <option value="Petrobras - Fretado">Petrobras - Fretado</option>
           <option value="Administração">Administração</option>
@@ -1793,7 +1794,8 @@ function formatContractName(contrato) {
     const p = part.trim();
     if (/^\d+$/.test(p)) return p; // Mantém número como está (ex: 206, 618)
     if (p.toUpperCase() === 'VT') return 'VT';
-    return p.toLowerCase().replace(/(?:^|\s)\S/g, a => a.toUpperCase());
+    if (p.toUpperCase().includes('CTCE')) return p.replace(/ctce/i, 'CTCE');
+    return p.toLowerCase().replace(/(^|[\s(/])(\w)/g, (m, p1, p2) => p1 + p2.toUpperCase());
   }).join(' - ');
 }
 
@@ -2119,7 +2121,7 @@ async function generateCandidateLocalPDF(token, nome) {
     const vaga = cand ? cand.vaga : '';
     const vagaLower = (vaga || '').toLowerCase();
     const hasHealthPlan = vagaLower.includes('1268') || vagaLower.includes('158') || vagaLower.includes('salvador') || vagaLower.includes('teca');
-    const isFretado = vagaLower.includes('618') || vagaLower.includes('indaiatuba') || vagaLower.includes('fretado') || (vagaLower.includes('petrobras') && !vagaLower.includes('vt'));
+    const isFretado = ((vagaLower.includes('618') || vagaLower.includes('indaiatuba')) && !vagaLower.includes('unidades')) || vagaLower.includes('ctce') || vagaLower.includes('fretado') || (vagaLower.includes('petrobras') && !vagaLower.includes('vt'));
     const isIndaiatuba = isFretado;
     const hasVT = true;
 
