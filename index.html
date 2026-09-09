@@ -955,55 +955,110 @@
             assinaturaBase64: assinaturaBase64
           };
 
-          // ETAPA 2: Enviar dados e PDF oficial para salvar no Drive
+          // ================================================================
+          // ETAPA 2 — DADOS DO FORMULÁRIO (PRIORIDADE MÁXIMA / SEM PDF)
+          // Envia apenas os dados textuais. Operação leve: sem pdfBase64,
+          // sem risco de timeout. Grava planilha e muda status → Concluído.
+          // O candidato só vê a tela de sucesso se ESTA etapa confirmar OK.
+          // ================================================================
           if (token && APPS_SCRIPT_URL !== 'COLE_A_URL_DO_APPS_SCRIPT_AQUI') {
-            const pdfBase64 = doc.output('datauristring');
-            const MAX_RETRIES = 3;
+            const pdfBase64 = doc.output('datauristring'); // gerado 1x, reutilizado na etapa 3
+            const MAX_RETRIES_DATA = 4;   // mais tentativas para dados (operação leve)
             let serverSuccess = false;
             let lastServerError = null;
 
-            for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+            for (let attempt = 1; attempt <= MAX_RETRIES_DATA; attempt++) {
               try {
-                console.log(`Tentativa ${attempt} de registrar formulário e PDF no servidor...`);
+                console.log(`[ETAPA 2] Tentativa ${attempt}/${MAX_RETRIES_DATA} — registrando dados no servidor (sem PDF)...`);
                 const submitResponse = await fetch(APPS_SCRIPT_URL, {
                   method: 'POST',
                   body: JSON.stringify({
                     action: 'submitForm',
                     token: token,
-                    formData: submissionFormData,
-                    pdfBase64: pdfBase64
+                    formData: submissionFormData
+                    // ✅ pdfBase64 AUSENTE — envio leve e rápido
                   })
                 });
                 const submitResult = await submitResponse.json();
+                console.log('[ETAPA 2] Resposta do servidor:', submitResult);
+
                 if (submitResult.success) {
                   serverSuccess = true;
+                  console.log('✅ [ETAPA 2] Dados gravados com sucesso. Status → Concluído.');
                   break;
                 } else if (submitResult.error) {
                   lastServerError = submitResult.error;
                   if (lastServerError.includes('já preenchido')) {
+                    // Formulário já foi enviado anteriormente — tratar como sucesso
                     serverSuccess = true;
+                    console.log('ℹ️ [ETAPA 2] Formulário já registrado anteriormente.');
                   }
-                  break;
+                  break; // erro definitivo do servidor — não fazer retry
                 }
               } catch (err) {
                 lastServerError = err.message || 'Erro de rede';
-                console.error(`Tentativa ${attempt} falhou:`, err);
-                if (attempt < MAX_RETRIES) {
+                console.error(`[ETAPA 2] Tentativa ${attempt} falhou (rede):`, err);
+                if (attempt < MAX_RETRIES_DATA) {
+                  // Espera progressiva: 1.5s, 3s, 4.5s entre tentativas
                   await new Promise(resolve => setTimeout(resolve, attempt * 1500));
                 }
               }
             }
 
+            // ── FALHA CRÍTICA NA ETAPA 2 ──────────────────────────────────
+            // Os dados não foram gravados. Candidato precisa tentar novamente.
+            // O PDF já foi baixado localmente — ele não perde nada.
             if (!serverSuccess) {
               const errMsg = lastServerError || 'Erro de conexão';
+              console.error('❌ [ETAPA 2] Falha definitiva ao registrar dados:', errMsg);
               setErrors({
-                global: `⚠️ Houve um problema ao registrar sua ficha no sistema (${errMsg}). Contudo, uma cópia do PDF com sua assinatura foi baixada em seu dispositivo. Por favor, tente enviar novamente ou encaminhe o PDF ao RH.`
+                global: `⚠️ Houve um problema ao registrar sua ficha no sistema (${errMsg}). Uma cópia do PDF com sua assinatura foi baixada em seu dispositivo. Por favor, clique em "Gerar PDF" novamente para reenviar, ou encaminhe o PDF salvo diretamente ao RH.`
               });
               setIsGenerating(false);
               return;
             }
 
+            // ── SUCESSO NA ETAPA 2: exibir tela de conclusão imediatamente ──
             setIsFormSubmitted(true);
+
+            // ================================================================
+            // ETAPA 3 — UPLOAD DO PDF AO GOOGLE DRIVE (SEGUNDO PLANO)
+            // Executada APÓS o sucesso da etapa 2. Não bloqueia a UX.
+            // Status já está Concluído. Se falhar, o admin pode gerar
+            // o PDF localmente pelo painel a qualquer momento.
+            // ================================================================
+            const MAX_RETRIES_PDF = 3;
+            (async () => {
+              for (let pdfAttempt = 1; pdfAttempt <= MAX_RETRIES_PDF; pdfAttempt++) {
+                try {
+                  console.log(`[ETAPA 3] Tentativa ${pdfAttempt}/${MAX_RETRIES_PDF} — enviando PDF ao Drive...`);
+                  const pdfResponse = await fetch(APPS_SCRIPT_URL, {
+                    method: 'POST',
+                    body: JSON.stringify({
+                      action: 'uploadPDF',
+                      token: token,
+                      pdfBase64: pdfBase64
+                    })
+                  });
+                  const pdfResult = await pdfResponse.json();
+                  if (pdfResult.success && pdfResult.pdfUrl) {
+                    console.log('✅ [ETAPA 3] PDF salvo no Drive com sucesso:', pdfResult.pdfUrl);
+                    break; // PDF salvo — encerrar loop
+                  } else {
+                    console.warn(`[ETAPA 3] Tentativa ${pdfAttempt} retornou sem sucesso:`, pdfResult);
+                    if (pdfAttempt < MAX_RETRIES_PDF) {
+                      await new Promise(resolve => setTimeout(resolve, pdfAttempt * 2000));
+                    }
+                  }
+                } catch (pdfErr) {
+                  console.warn(`[ETAPA 3] Tentativa ${pdfAttempt} falhou (rede):`, pdfErr.message);
+                  if (pdfAttempt < MAX_RETRIES_PDF) {
+                    await new Promise(resolve => setTimeout(resolve, pdfAttempt * 2000));
+                  }
+                }
+              }
+              console.log('[ETAPA 3] Processo de upload do PDF finalizado (com ou sem sucesso).');
+            })(); // IIFE assíncrona — executa em segundo plano sem bloquear a UI
           }
 
           setSuccessMessage('Ficha cadastral gerada com sucesso! O download do PDF iniciou automaticamente.');

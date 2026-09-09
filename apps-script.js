@@ -138,10 +138,11 @@ function doPost(e) {
 function addCandidate(params) {
   if (params.secret !== CONFIG.ADMIN_SECRET) return { error: 'Não autorizado' };
 
-  const nome      = (params.nome  || '').trim();
-  const email     = (params.email || '').trim();
-  const vaga      = (params.vaga  || '').trim();
-  const sendEmail = params.sendEmail === 'true';
+  const nome          = (params.nome          || '').trim();
+  const email         = (params.email         || '').trim();
+  const vaga          = (params.vaga          || '').trim();
+  const registradoPor = (params.registradoPor || '').trim(); // ← Responsável RH
+  const sendEmail     = params.sendEmail === 'true';
 
   if (!nome || !email || !vaga) return { error: 'Nome, e-mail e vaga são obrigatórios.' };
 
@@ -153,7 +154,8 @@ function addCandidate(params) {
   const now   = formatDate(new Date());
   const id    = Date.now().toString();
 
-  sheet.appendRow([id, nome, email, vaga, token, 'Pendente', now, '']);
+  // Colunas: ID | Nome | Email | Vaga | Token | Status | DataEnvio | DataPreenchimento | PDFUrl | RegistradoPor
+  sheet.appendRow([id, nome, email, vaga, token, 'Pendente', now, '', '', registradoPor]);
 
   const formUrl = CONFIG.FORM_URL + '?token=' + token;
   let emailSent = false;
@@ -240,7 +242,8 @@ function getCandidates(secret) {
       status:            data[i][5] || 'Pendente',
       dataEnvio:         data[i][6] || '',
       dataPreenchimento: data[i][7] || '',
-      pdfUrl:            data[i][8] || ''
+      pdfUrl:            data[i][8] || '',
+      registradoPor:     data[i][9] || ''  // ← Responsável RH que fez o cadastro
     });
   }
 
@@ -423,8 +426,14 @@ function submitForm(data) {
     }
 
     var fd    = data.formData || {};
+
+    // ── Helper: remove máscara de CPF/doc (deixa apenas dígitos) ──────────
+    function stripMask(val) {
+      return String(val || '').replace(/\D/g, '');
+    }
+
     var depIR = (fd.dependentesIR || []).map(function(d) {
-      return (d.nome || '') + ' | CPF: ' + (d.cpf || '') + ' | Parentesco: ' + (d.parentesco || '');
+      return (d.nome || '') + ' | CPF: ' + stripMask(d.cpf) + ' | Parentesco: ' + (d.parentesco || '');
     }).join(' ;; ');
 
     // Mapeamento dinâmico de campos pelo cabeçalho da planilha
@@ -435,7 +444,7 @@ function submitForm(data) {
       'nomecandidato': candidateName,
       'nomecompleto': fd.nomeCompleto || '',
       'nomesocial': fd.nomeSocial || '',
-      'cpf': fd.cpf || '',
+      'cpf': stripMask(fd.cpf),
       'rg': fd.rg || '',
       'raçacor': fd.racaCor || '',
       'racacor': fd.racaCor || '',
@@ -469,9 +478,9 @@ function submitForm(data) {
       'planosaúde': fd.planoSaudeOpcao || '',
       'planosaude': fd.planoSaudeOpcao || '',
       'dep1nome': fd.dependente1Nome || '',
-      'dep1cpf': fd.dependente1Cpf || '',
+      'dep1cpf': stripMask(fd.dependente1Cpf),
       'dep2nome': fd.dependente2Nome || '',
-      'dep2cpf': fd.dependente2Cpf || '',
+      'dep2cpf': stripMask(fd.dependente2Cpf),
       'tipoassinatura': fd.tipoAssinatura || '',
       'pdfurl': pdfUrl
     };
@@ -486,7 +495,7 @@ function submitForm(data) {
       rowData = [
         token, now, candidateName,
         fd.nomeCompleto || '', fd.nomeSocial || '',
-        fd.cpf || '', fd.rg || '',
+        stripMask(fd.cpf), fd.rg || '',    // ← CPF sem máscara
         fd.racaCor || '',
         fd.endereco || '', fd.bairroCidade || '', fd.cep || '',
         fd.whatsapp || '', fd.email || '',
@@ -497,8 +506,8 @@ function submitForm(data) {
         fd.estadoCivil || '', fd.estadoCivilOutro || '',
         fd.botaNumero || '', fd.camisaTamanho || '', fd.calcaTamanho || '',
         fd.optanteVT || '', fd.planoSaudeOpcao || '',
-        fd.dependente1Nome || '', fd.dependente1Cpf || '',
-        fd.dependente2Nome || '', fd.dependente2Cpf || '',
+        fd.dependente1Nome || '', stripMask(fd.dependente1Cpf), // ← sem máscara
+        fd.dependente2Nome || '', stripMask(fd.dependente2Cpf), // ← sem máscara
         fd.tipoAssinatura || '', pdfUrl
       ];
     }
@@ -555,11 +564,19 @@ function submitForm(data) {
 
 // ============================================================
 // FUNÇÃO: Carregar PDF em segundo plano (candidato)
+// Chamada em ETAPA SEPARADA após o submitForm já ter gravado os dados.
+// Status já estará "Concluído" quando esta função for chamada.
 // ============================================================
 function uploadPDF(data) {
   var token = data.token;
   if (!token) return { error: 'Token não fornecido' };
   if (!data.pdfBase64) return { error: 'PDF em base64 não fornecido' };
+
+  // Guard: tamanho máximo de ~8MB base64 (~6MB PDF) — acima disso rejeita
+  if (data.pdfBase64.length > 8000000) {
+    Logger.log('⚠️ uploadPDF: payload excede 8MB (' + data.pdfBase64.length + ' chars). Rejeitado.');
+    return { error: 'PDF excede o tamanho máximo permitido (6 MB). Reduza o tamanho do arquivo.' };
+  }
 
   var ss     = SpreadsheetApp.openById(CONFIG.SPREADSHEET_ID);
   var cSheet = ss.getSheetByName(SHEET_CANDIDATES);
@@ -568,20 +585,29 @@ function uploadPDF(data) {
 
   var candidateName = '';
   var candidateRow  = -1;
+  var existingPdfUrl = '';
 
   var cData = cSheet.getDataRange().getValues();
   var reqToken = String(token || '').trim();
 
   for (var i = 1; i < cData.length; i++) {
     if (String(cData[i][4] || '').trim() === reqToken) {
-      candidateName = cData[i][1];
-      candidateRow  = i + 1;
+      candidateName   = cData[i][1];
+      candidateRow    = i + 1;
+      existingPdfUrl  = String(cData[i][8] || '').trim();
       break;
     }
   }
 
   if (candidateRow === -1) {
     return { error: 'Candidato não encontrado para este token.' };
+  }
+
+  // ── GUARD: PDF já existe no Drive para este candidato ──────────────
+  // Evita criar arquivos duplicados caso a Etapa 3 seja chamada mais de uma vez.
+  if (existingPdfUrl && existingPdfUrl.indexOf('drive.google.com') !== -1) {
+    Logger.log('ℹ️ uploadPDF: PDF já existe para ' + candidateName + ' → ' + existingPdfUrl + ' | Ignorando upload duplicado.');
+    return { success: true, pdfUrl: existingPdfUrl, alreadyUploaded: true };
   }
 
   var pdfUrl = '';
@@ -594,18 +620,31 @@ function uploadPDF(data) {
     var file   = folder.createFile(pdfBlob);
     file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
     pdfUrl = 'https://drive.google.com/file/d/' + file.getId() + '/view';
-    Logger.log('PDF salvo em segundo plano via uploadPDF: ' + pdfUrl);
+    Logger.log('✅ uploadPDF: PDF salvo no Drive para ' + candidateName + ': ' + pdfUrl);
 
-    // Atualizar link na planilha de Candidatos (coluna 9, index 8)
+    // ── Atualizar aba Candidatos (coluna 9 = PDFUrl) ─────────────────
     cSheet.getRange(candidateRow, 9).setValue(pdfUrl);
 
-    // Atualizar link na planilha de Respostas
+    // ── Atualizar aba Respostas (busca coluna PDFUrl pelo cabeçalho) ──
     var rData = rSheet.getDataRange().getValues();
-    var pdfCol = rData[0].indexOf('PDFUrl') + 1;
-    if (pdfCol <= 0) pdfCol = rData[0].length;
+    var rHeaders = rData[0];
+
+    // Localiza a coluna PDFUrl de forma robusta (case-insensitive)
+    var pdfColIdx = -1;
+    for (var c = 0; c < rHeaders.length; c++) {
+      var hKey = String(rHeaders[c] || '').toLowerCase().trim();
+      if (hKey === 'pdfurl' || hKey === 'pdf url' || hKey === 'pdf_url') {
+        pdfColIdx = c;
+        break;
+      }
+    }
+    // Fallback: última coluna se não encontrou pelo nome
+    if (pdfColIdx === -1) pdfColIdx = rHeaders.length - 1;
+
     for (var j = 1; j < rData.length; j++) {
       if (String(rData[j][0] || '').trim() === reqToken) {
-        rSheet.getRange(j + 1, pdfCol).setValue(pdfUrl);
+        rSheet.getRange(j + 1, pdfColIdx + 1).setValue(pdfUrl);
+        Logger.log('✅ uploadPDF: PDFUrl atualizado na aba Respostas linha ' + (j + 1));
         break;
       }
     }
@@ -614,11 +653,12 @@ function uploadPDF(data) {
     return { success: true, pdfUrl: pdfUrl };
 
   } catch (pdfErr) {
-    Logger.log('❌ Erro no upload do PDF: ' + pdfErr.message);
+    Logger.log('❌ uploadPDF: Erro ao salvar PDF: ' + pdfErr.message);
     _registrarErro(ss, token, candidateName, 'UPLOAD_PDF_FALHOU', pdfErr.message);
     return { error: pdfErr.message };
   }
 }
+
 
 
 // ============================================================
@@ -710,9 +750,28 @@ function ensureSheets() {
   var cs = ss.getSheetByName(SHEET_CANDIDATES);
   if (!cs) cs = ss.insertSheet(SHEET_CANDIDATES);
   if (cs.getLastRow() === 0) {
-    cs.appendRow(['ID','Nome','Email','Vaga','Token','Status','DataEnvio','DataPreenchimento','PDFUrl']);
+    // Planilha nova: criar cabeçalho completo incluindo RegistradoPor
+    cs.appendRow(['ID','Nome','Email','Vaga','Token','Status','DataEnvio','DataPreenchimento','PDFUrl','RegistradoPor']);
     cs.setFrozenRows(1);
     cs.getRange('1:1').setFontWeight('bold').setBackground('#211551').setFontColor('white');
+  } else {
+    // Planilha existente: garantir que a coluna RegistradoPor exista (migração)
+    try {
+      var csLastCol = cs.getLastColumn();
+      if (csLastCol > 0) {
+        var csHeaders = cs.getRange(1, 1, 1, csLastCol).getValues()[0];
+        var hasRegistradoPor = csHeaders.some(function(h) {
+          return String(h || '').toLowerCase().replace(/\s+/g,'') === 'registradopor';
+        });
+        if (!hasRegistradoPor) {
+          cs.getRange(1, csLastCol + 1).setValue('RegistradoPor')
+            .setFontWeight('bold').setBackground('#211551').setFontColor('white');
+          Logger.log('✅ ensureSheets: Coluna RegistradoPor adicionada à aba Candidatos.');
+        }
+      }
+    } catch(e) {
+      Logger.log('Erro ao checar coluna RegistradoPor: ' + e.message);
+    }
   }
 
   var rs = ss.getSheetByName(SHEET_RESPONSES);

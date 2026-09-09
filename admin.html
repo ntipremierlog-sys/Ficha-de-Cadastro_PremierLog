@@ -1137,6 +1137,14 @@
           <option value="Administração">Administração</option>
         </select>
       </div>
+      <div class="form-group">
+        <label class="form-label" for="inputRegistradoPor" style="display:flex;align-items:center;gap:6px;">
+          👤 Cadastrado por (RH) *
+          <span title="Seu nome será salvo automaticamente" style="font-size:11px;color:var(--text-2);font-weight:400;background:var(--bg);border:1px solid var(--border);border-radius:12px;padding:1px 7px;cursor:default;">💾 autossalvo</span>
+        </label>
+        <input class="form-input" id="inputRegistradoPor" type="text" placeholder="Ex: Ana Paula (RH)" autocomplete="off" />
+        <p style="font-size:11px;color:var(--text-2);margin:4px 0 0;line-height:1.5;">Seu nome ficará registrado junto ao cadastro do candidato e será lembrado automaticamente.</p>
+      </div>
       <label class="form-check" id="emailCheck">
         <input type="checkbox" id="checkSendEmail" checked />
         <span class="form-check-label">📧 Enviar e-mail de convite automaticamente</span>
@@ -1950,6 +1958,7 @@ function renderRecentTable() {
           <div class="candidate-info">
             <strong>${esc(c.nome)}</strong>
             <span>${esc(c.email)}</span>
+            ${c.registradoPor ? `<span style="font-size:10.5px;color:var(--text-3);margin-top:1px;">👤 ${esc(c.registradoPor)}</span>` : ''}
           </div>
         </div>
       </td>
@@ -1978,6 +1987,7 @@ function renderCandidatesTable() {
           <div class="candidate-info">
             <strong>${esc(c.nome)}</strong>
             <span>${esc(c.email)}</span>
+            ${c.registradoPor ? `<span style="font-size:10.5px;color:var(--text-3);margin-top:1px;">👤 ${esc(c.registradoPor)}</span>` : ''}
           </div>
         </div>
       </td>
@@ -2730,21 +2740,29 @@ function handleFuncaoSelectChange(sel) {
 function openAddModal() {
   document.getElementById('inputNome').value = '';
   document.getElementById('inputEmail').value = '';
-  
+
   const selVaga = document.getElementById('selectVagaPredefinida');
   if (selVaga) selVaga.value = 'Auxiliar Operacional';
-  
+
   const inputOutro = document.getElementById('inputVagaOutro');
   if (inputOutro) {
     inputOutro.value = '';
     inputOutro.style.display = 'none';
   }
-  
+
   document.getElementById('selectContrato').value = '';
   document.getElementById('checkSendEmail').checked = true;
   document.getElementById('successLinkBox').style.display = 'none';
   document.getElementById('addModalFooter').style.display = 'flex';
   document.getElementById('btnSaveCandidate').disabled = false;
+
+  // ✨ Restaurar nome do RH salvo no localStorage (autossalvo)
+  const inputReg = document.getElementById('inputRegistradoPor');
+  if (inputReg) {
+    const saved = localStorage.getItem('premier_rh_nome') || '';
+    inputReg.value = saved;
+  }
+
   openModal('addModal');
   setTimeout(() => document.getElementById('inputNome').focus(), 200);
 }
@@ -2753,22 +2771,26 @@ let lastGenToken = '';
 async function saveCandidate() {
   const nome  = document.getElementById('inputNome').value.trim();
   const email = document.getElementById('inputEmail').value.trim();
-  
+
   // Extrai função predefinida ou digitada
   const selVaga = document.getElementById('selectVagaPredefinida').value;
   let cargo = selVaga;
   if (selVaga === '__outro__') {
     cargo = document.getElementById('inputVagaOutro').value.trim();
   }
-  
-  const contrato = document.getElementById('selectContrato').value;
-  const send  = document.getElementById('checkSendEmail').checked;
 
-  if (!nome || !email || !cargo || !contrato) { 
-    showToast('Preencha todos os campos obrigatórios (incluindo Função e Contrato).', 'warning'); 
-    return; 
+  const contrato      = document.getElementById('selectContrato').value;
+  const registradoPor = document.getElementById('inputRegistradoPor').value.trim();
+  const send          = document.getElementById('checkSendEmail').checked;
+
+  if (!nome || !email || !cargo || !contrato || !registradoPor) {
+    showToast('Preencha todos os campos obrigatórios, incluindo quem está realizando o cadastro.', 'warning');
+    return;
   }
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { showToast('E-mail inválido.', 'warning'); return; }
+
+  // 💾 Salvar nome do RH no localStorage para próxima vez
+  localStorage.setItem('premier_rh_nome', registradoPor);
 
   const vaga = cargo + ' - ' + contrato;
 
@@ -2791,7 +2813,8 @@ async function saveCandidate() {
         token: token,
         status: "Pendente",
         dataEnvio: new Date().toLocaleDateString('pt-BR') + " " + new Date().toLocaleTimeString('pt-BR', {hour: '2-digit', minute:'2-digit'}),
-        dataPreenchimento: ""
+        dataPreenchimento: "",
+        registradoPor: registradoPor
       });
       
       lastGenToken = token;
@@ -2810,7 +2833,7 @@ async function saveCandidate() {
   }
 
   try {
-    const params = { action: 'addCandidate', nome, email, vaga, sendEmail: send ? 'true' : 'false' };
+    const params = { action: 'addCandidate', nome, email, vaga, registradoPor, sendEmail: send ? 'true' : 'false' };
     const data = await apiGet(params);
     if (data.error) { showToast('Erro: ' + data.error, 'error'); btn.disabled = false; btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="15" height="15"><polyline points="20 6 9 17 4 12"/></svg> Cadastrar'; return; }
 
