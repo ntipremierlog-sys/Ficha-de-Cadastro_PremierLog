@@ -1058,6 +1058,9 @@
                 <select class="filter-select" id="contratoFilter" onchange="applyFilters()">
                   <option value="">Todas as unidades</option>
                 </select>
+                <select class="filter-select" id="cadastranteFilter" onchange="applyFilters()" title="Filtrar por quem cadastrou">
+                  <option value="">👤 Todos os cadastrantes</option>
+                </select>
               </div>
             </div>
             <div class="filter-counter-wrap">
@@ -1789,6 +1792,7 @@ function clearFilters() {
   document.getElementById('statusFilter').value = '';
   document.getElementById('funcaoFilter').value = '';
   document.getElementById('contratoFilter').value = '';
+  document.getElementById('cadastranteFilter').value = '';
   applyFilters();
 }
 
@@ -1830,15 +1834,20 @@ function extractVagaParts(vaga) {
 function populateFilters() {
   const funcoes = new Set();
   const contratos = new Set();
+  const cadastrantes = new Set();
   
   state.candidates.forEach(c => {
     const { funcao, contrato } = extractVagaParts(c.vaga);
     if (funcao) funcoes.add(funcao);
     if (contrato) contratos.add(contrato);
+    if (c.registradoPor && String(c.registradoPor).trim()) {
+      cadastrantes.add(String(c.registradoPor).trim());
+    }
   });
   
   const sortedFuncoes = [...funcoes].sort();
   const sortedContratos = [...contratos].sort();
+  const sortedCadastrantes = [...cadastrantes].sort();
   
   const selFuncao = document.getElementById('funcaoFilter');
   if (selFuncao) {
@@ -1865,13 +1874,27 @@ function populateFilters() {
       selContrato.appendChild(o);
     });
   }
+
+  const selCadastrante = document.getElementById('cadastranteFilter');
+  if (selCadastrante) {
+    const currCadastrante = selCadastrante.value;
+    selCadastrante.innerHTML = '<option value="">👤 Todos os cadastrantes</option>';
+    sortedCadastrantes.forEach(name => {
+      const o = document.createElement('option');
+      o.value = name;
+      o.textContent = name;
+      if (name === currCadastrante) o.selected = true;
+      selCadastrante.appendChild(o);
+    });
+  }
 }
 
 function applyFilters() {
-  const q        = (document.getElementById('searchInput').value || '').toLowerCase().trim();
-  const stt      = document.getElementById('statusFilter').value;
-  const fFilter  = document.getElementById('funcaoFilter').value;
-  const cFilter  = document.getElementById('contratoFilter').value;
+  const q              = (document.getElementById('searchInput').value || '').toLowerCase().trim();
+  const stt            = document.getElementById('statusFilter').value;
+  const fFilter        = document.getElementById('funcaoFilter').value;
+  const cFilter        = document.getElementById('contratoFilter').value;
+  const cadFilter      = (document.getElementById('cadastranteFilter').value || '').trim();
   
   state.filtered = state.candidates.filter(c => {
     const nomeEmail = (String(c.nome || '') + ' ' + String(c.email || '')).toLowerCase();
@@ -1881,11 +1904,13 @@ function applyFilters() {
     const { funcao, contrato } = extractVagaParts(c.vaga);
     if (fFilter && funcao !== fFilter) return false;
     if (cFilter && contrato !== cFilter) return false;
+
+    if (cadFilter && String(c.registradoPor || '').trim() !== cadFilter) return false;
     
     return true;
   });
 
-  const isFiltered = q || stt || fFilter || cFilter;
+  const isFiltered = q || stt || fFilter || cFilter || cadFilter;
   const countLabel = document.getElementById('candidateCountLabel');
   if (countLabel) {
     if (isFiltered) {
