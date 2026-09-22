@@ -57,6 +57,7 @@ function doGet(e) {
       case 'cleanTestResponses':      return jsonResponse(cleanTestResponses(e.parameter.secret));
       case 'syncStatuses':            return jsonResponse(syncStatuses(e.parameter.secret));
       case 'bulkConcluirByDate':      return jsonResponse(bulkConcluirByDate(e.parameter.secret, e.parameter.dataLimite));
+      case 'excluirPendentesPorData': return jsonResponse(excluirPendentesPorData(e.parameter.secret, e.parameter.dataLimite || '31/08/2026'));
       case 'auditarRespostasFaltantes': return jsonResponse(auditarRespostasFaltantes(e.parameter.secret));
       default:                        return jsonResponse({ error: 'Ação inválida: ' + action });
     }
@@ -851,6 +852,38 @@ function resetCandidateStatus(token, secret) {
   return { error: 'Candidato não encontrado' };
 }
 
+// ============================================================
+// FUNÇÃO: Excluir Candidato Individual (Admin)
+// ============================================================
+function deleteCandidate(token, secret) {
+  if (secret !== CONFIG.ADMIN_SECRET) return { error: 'Não autorizado' };
+  if (!token) return { error: 'Token obrigatório' };
+  ensureSheets();
+
+  var ss    = SpreadsheetApp.openById(CONFIG.SPREADSHEET_ID);
+  var sheet = ss.getSheetByName(SHEET_CANDIDATES);
+  var data  = sheet.getDataRange().getValues();
+
+  for (var i = 1; i < data.length; i++) {
+    if (String(data[i][4] || '').trim() === token.trim()) {
+      sheet.deleteRow(i + 1);
+      // Remover da aba Respostas também se houver
+      var rs = ss.getSheetByName(SHEET_RESPONSES);
+      if (rs) {
+        var rData = rs.getDataRange().getValues();
+        for (var j = 1; j < rData.length; j++) {
+          if (String(rData[j][0] || '').trim() === token.trim()) {
+            rs.deleteRow(j + 1);
+            break;
+          }
+        }
+      }
+      return { success: true, message: 'Candidato excluído com sucesso.' };
+    }
+  }
+  return { error: 'Candidato não encontrado' };
+}
+
 function cleanTestResponses(secret) {
   if (secret !== CONFIG.ADMIN_SECRET) return { error: 'Não autorizado' };
   var ss = SpreadsheetApp.openById(CONFIG.SPREADSHEET_ID);
@@ -1356,3 +1389,226 @@ function _reenviarPorPeriodo(dataInicioStr, dataFimStr) {
 
   return { enviados: enviados, ignorados: ignorados, erros: erros };
 }
+
+// ============================================================
+// FUNÇÃO DE 1 CLIQUE PARA O GOOGLE APPS SCRIPT EDITOR:
+// Exclui os candidatos Pendentes desde o início até 31/08/2026.
+//
+// ⚠️ COMO EXECUTAR AGORA:
+// 1. Abra o editor em script.google.com
+// 2. Cole este código atualizado e Salve (Ctrl + S)
+// 3. No menu suspenso de funções (ao lado de 'Depurar'), selecione:
+//    "excluirPendentesAteAgosto2026"
+// 4. Clique em ▶️ Executar
+// 5. Um backup da aba Candidatos é criado AUTOMATICAMENTE antes da exclusão.
+// ============================================================
+function excluirPendentesAteAgosto2026() {
+  return excluirPendentesPorData(CONFIG.ADMIN_SECRET, '31/08/2026');
+}
+
+// ============================================================
+// FUNÇÃO: Excluir Pendentes por Data Limite (com backup automático)
+// Alta performance: processa em memória e atualiza a planilha de
+// uma só vez, evitando timeout do Google Apps Script.
+// Remove também linhas vazias excedentes para aliviar a carga.
+// ============================================================
+function excluirPendentesPorData(secret, dataLimiteStr) {
+  if (secret !== CONFIG.ADMIN_SECRET) return { error: 'Não autorizado' };
+  if (!dataLimiteStr) return { error: 'Parâmetro dataLimite é obrigatório (formato DD/MM/YYYY ou YYYY-MM-DD)' };
+
+  Logger.log('====================================================');
+  Logger.log('INICIANDO EXCLUSÃO DE CANDIDATOS PENDENTES');
+  Logger.log('Data limite: ' + dataLimiteStr + ' (inclusivo até 23:59:59)');
+  Logger.log('====================================================');
+
+  // Parsear dataLimite para fim do dia (23:59:59.999)
+  var limiteDate = null;
+  if (dataLimiteStr.indexOf('/') !== -1) {
+    var p = dataLimiteStr.split('/');
+    if (p.length === 3) {
+      limiteDate = new Date(parseInt(p[2]), parseInt(p[1]) - 1, parseInt(p[0]), 23, 59, 59, 999);
+    }
+  } else if (dataLimiteStr.indexOf('-') !== -1) {
+    var p2 = dataLimiteStr.split('-');
+    if (p2.length === 3) {
+      limiteDate = new Date(parseInt(p2[0]), parseInt(p2[1]) - 1, parseInt(p2[2]), 23, 59, 59, 999);
+    }
+  }
+
+  if (!limiteDate || isNaN(limiteDate.getTime())) {
+    Logger.log('❌ Data limite inválida: ' + dataLimiteStr);
+    return { error: 'Data limite inválida. Use o formato DD/MM/YYYY ou YYYY-MM-DD.' };
+  }
+
+  ensureSheets();
+  var ss    = SpreadsheetApp.openById(CONFIG.SPREADSHEET_ID);
+  var sheet = ss.getSheetByName(SHEET_CANDIDATES);
+  var data  = sheet.getDataRange().getValues();
+
+  if (data.length <= 1) {
+    Logger.log('Planilha sem candidatos cadastrados.');
+    return { success: true, message: 'Planilha sem registros para processar.', totalExcluidos: 0 };
+  }
+
+  // 1. BACKUP AUTOMÁTICO DE SEGURANÇA DA ABA CANDIDATOS
+  var agora = new Date();
+  var stamp = Utilities.formatDate(agora, 'America/Sao_Paulo', 'yyyyMMdd_HHmmss');
+  var nomeBkp = 'Bkp_Candidatos_' + stamp;
+  try {
+    var bkpSheet = sheet.copyTo(ss);
+    bkpSheet.setName(nomeBkp);
+    Logger.log('🛡️ BACKUP CRIADO COM SUCESSO: Aba "' + nomeBkp + '"');
+  } catch (errBkp) {
+    Logger.log('⚠️ Aviso ao criar backup: ' + errBkp.message);
+  }
+
+  var cabecalho = data[0];
+  var linhasManter = [cabecalho];
+  var excluidos = [];
+  var ignoradosNaoPendentes = 0;
+  var mantidosPendentesAposData = 0;
+  var mantidosDataInvalida = 0;
+  var tokensExcluidos = {};
+
+  for (var i = 1; i < data.length; i++) {
+    var linha = data[i];
+    var id           = String(linha[0] || '').trim();
+    var nome         = String(linha[1] || '').trim();
+    var email        = String(linha[2] || '').trim();
+    var vaga         = String(linha[3] || '').trim();
+    var token        = String(linha[4] || '').trim();
+    var status       = String(linha[5] || '').trim();
+    var dataEnvioRaw = linha[6];
+
+    // Linhas totalmente vazias no final são descartadas
+    if (!id && !nome && !token) continue;
+
+    // Se o status NÃO for Pendente (ex: Concluído), MANTER SEMPRE
+    if (status.toLowerCase() !== 'pendente') {
+      linhasManter.push(linha);
+      ignoradosNaoPendentes++;
+      continue;
+    }
+
+    // Parsear data de envio do candidato
+    var envioDate = null;
+    if (dataEnvioRaw instanceof Date) {
+      envioDate = dataEnvioRaw;
+    } else if (typeof dataEnvioRaw === 'string' && dataEnvioRaw.trim() !== '') {
+      var str = dataEnvioRaw.trim();
+      var m = str.match(/^(\d{2})\/(\d{2})\/(\d{4})/);
+      if (m) {
+        var horaMatch = str.match(/\s+(\d{2}):(\d{2})/);
+        var h = horaMatch ? parseInt(horaMatch[1]) : 0;
+        var mi = horaMatch ? parseInt(horaMatch[2]) : 0;
+        envioDate = new Date(parseInt(m[3]), parseInt(m[2]) - 1, parseInt(m[1]), h, mi);
+      } else {
+        envioDate = new Date(str);
+      }
+    } else if (typeof dataEnvioRaw === 'number') {
+      envioDate = new Date((dataEnvioRaw - 25569) * 86400 * 1000);
+    }
+
+    // Se data for inválida ou ilegível, MANTER por segurança
+    if (!envioDate || isNaN(envioDate.getTime())) {
+      Logger.log('⚠️ Data ilegível mantida por segurança: ' + nome + ' (' + dataEnvioRaw + ')');
+      linhasManter.push(linha);
+      mantidosDataInvalida++;
+      continue;
+    }
+
+    // Avaliar se dataEnvio está até a data limite
+    if (envioDate <= limiteDate) {
+      excluidos.push({
+        id: id,
+        nome: nome,
+        email: email,
+        vaga: vaga,
+        token: token,
+        dataEnvio: Utilities.formatDate(envioDate, 'America/Sao_Paulo', 'dd/MM/yyyy HH:mm')
+      });
+      if (token) tokensExcluidos[token] = true;
+    } else {
+      // Pendente, mas de data posterior a 31/08/2026 (ex: setembro/2026 recente)
+      linhasManter.push(linha);
+      mantidosPendentesAposData++;
+    }
+  }
+
+  Logger.log('📊 RESUMO DA TRIAGEM:');
+  Logger.log(' - Linhas analisadas: ' + (data.length - 1));
+  Logger.log(' - Não-Pendentes mantidos (Concluídos): ' + ignoradosNaoPendentes);
+  Logger.log(' - Pendentes após ' + dataLimiteStr + ' mantidos: ' + mantidosPendentesAposData);
+  if (mantidosDataInvalida > 0) Logger.log(' - Mantidos por data ilegível: ' + mantidosDataInvalida);
+  Logger.log(' - Candidatos Pendentes a EXCLUIR: ' + excluidos.length);
+
+  if (excluidos.length === 0) {
+    Logger.log('ℹ️ Nenhum candidato pendente até ' + dataLimiteStr + ' foi localizado.');
+    return {
+      success: true,
+      totalExcluidos: 0,
+      totalMantidos: linhasManter.length - 1,
+      backupCriado: nomeBkp,
+      message: 'Nenhum candidato pendente até ' + dataLimiteStr + ' encontrado para exclusão.'
+    };
+  }
+
+  // 2. ATUALIZAR A ABA CANDIDATOS EM UMA ÚNICA OPERAÇÃO RÁPIDA
+  sheet.clearContents();
+  sheet.getRange(1, 1, linhasManter.length, cabecalho.length).setValues(linhasManter);
+  sheet.setFrozenRows(1);
+  sheet.getRange(1, 1, 1, cabecalho.length).setFontWeight('bold').setBackground('#211551').setFontColor('white');
+
+  // OTIMIZAÇÃO: Excluir linhas em branco excedentes na planilha para aliviar a carga
+  var maxLinhas = sheet.getMaxRows();
+  if (maxLinhas > linhasManter.length + 5) {
+    try {
+      sheet.deleteRows(linhasManter.length + 1, maxLinhas - (linhasManter.length + 5));
+      Logger.log('⚡ Planilha otimizada: linhas excedentes em branco removidas.');
+    } catch (eTrim) {
+      Logger.log('Aviso ao otimizar linhas em branco: ' + eTrim.message);
+    }
+  }
+
+  // 3. LIMPAR REGISTROS ÓRFÃOS NA ABA RESPOSTAS (se houver)
+  var rSheet = ss.getSheetByName(SHEET_RESPONSES);
+  var rRemovidos = 0;
+  if (rSheet && rSheet.getLastRow() > 1) {
+    var rData = rSheet.getDataRange().getValues();
+    var rManter = [rData[0]];
+    for (var r = 1; r < rData.length; r++) {
+      var rToken = String(rData[r][0] || '').trim();
+      if (rToken && tokensExcluidos[rToken]) {
+        rRemovidos++;
+      } else {
+        rManter.push(rData[r]);
+      }
+    }
+    if (rRemovidos > 0) {
+      rSheet.clearContents();
+      rSheet.getRange(1, 1, rManter.length, rManter[0].length).setValues(rManter);
+      var rMax = rSheet.getMaxRows();
+      if (rMax > rManter.length + 5) {
+        try { rSheet.deleteRows(rManter.length + 1, rMax - (rManter.length + 5)); } catch(e) {}
+      }
+      Logger.log('🧹 ' + rRemovidos + ' registros órfãos removidos da aba Respostas.');
+    }
+  }
+
+  Logger.log('====================================================');
+  Logger.log('✅ EXCLUSÃO CONCLUÍDA COM SUCESSO!');
+  Logger.log(' - Total de pendentes excluídos: ' + excluidos.length);
+  Logger.log(' - Total de registros restantes: ' + (linhasManter.length - 1));
+  Logger.log(' - Backup preservado na aba: ' + nomeBkp);
+  Logger.log('====================================================');
+
+  return {
+    success: true,
+    totalExcluidos: excluidos.length,
+    totalMantidos: linhasManter.length - 1,
+    backupCriado: nomeBkp,
+    dataLimite: dataLimiteStr,
+    message: 'Sucesso! ' + excluidos.length + ' candidatos com status Pendente até ' + dataLimiteStr + ' foram excluídos. A planilha foi otimizada e o backup foi salvo na aba "' + nomeBkp + '".'
+  };
+}
+
