@@ -57,7 +57,7 @@ function doGet(e) {
       case 'cleanTestResponses':      return jsonResponse(cleanTestResponses(e.parameter.secret));
       case 'syncStatuses':            return jsonResponse(syncStatuses(e.parameter.secret));
       case 'bulkConcluirByDate':      return jsonResponse(bulkConcluirByDate(e.parameter.secret, e.parameter.dataLimite));
-      case 'excluirPendentesPorData': return jsonResponse(excluirPendentesPorData(e.parameter.secret, e.parameter.dataLimite || '31/08/2026'));
+      case 'excluirPendentesPorData': return jsonResponse(excluirPendentesPorData(e.parameter.secret, e.parameter.dataLimite || '13/09/2026'));
       case 'auditarRespostasFaltantes': return jsonResponse(auditarRespostasFaltantes(e.parameter.secret));
       default:                        return jsonResponse({ error: 'Ação inválida: ' + action });
     }
@@ -1392,16 +1392,24 @@ function _reenviarPorPeriodo(dataInicioStr, dataFimStr) {
 
 // ============================================================
 // FUNÇÃO DE 1 CLIQUE PARA O GOOGLE APPS SCRIPT EDITOR:
-// Exclui os candidatos Pendentes desde o início até 31/08/2026.
+// Exclui os candidatos Pendentes desde o início até 13/09/2026.
 //
 // ⚠️ COMO EXECUTAR AGORA:
-// 1. Abra o editor em script.google.com
+// 1. No Google Apps Script Editor (script.google.com):
 // 2. Cole este código atualizado e Salve (Ctrl + S)
 // 3. No menu suspenso de funções (ao lado de 'Depurar'), selecione:
-//    "excluirPendentesAteAgosto2026"
+//    "excluirPendentesAte13Setembro2026" (ou "executarExclusaoPendentes")
 // 4. Clique em ▶️ Executar
 // 5. Um backup da aba Candidatos é criado AUTOMATICAMENTE antes da exclusão.
 // ============================================================
+function excluirPendentesAte13Setembro2026() {
+  return excluirPendentesPorData(CONFIG.ADMIN_SECRET, '13/09/2026');
+}
+
+function executarExclusaoPendentes() {
+  return excluirPendentesPorData(CONFIG.ADMIN_SECRET, '13/09/2026');
+}
+
 function excluirPendentesAteAgosto2026() {
   return excluirPendentesPorData(CONFIG.ADMIN_SECRET, '31/08/2026');
 }
