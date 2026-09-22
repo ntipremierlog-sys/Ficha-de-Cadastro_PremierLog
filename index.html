@@ -266,9 +266,10 @@
           return;
         }
 
-        fetch(`${APPS_SCRIPT_URL}?action=validateToken&token=${tokenParam}`)
-          .then(res => res.json())
-          .then(data => {
+        const doValidateToken = async (retriesLeft = 3) => {
+          try {
+            const res = await fetch(`${APPS_SCRIPT_URL}?action=validateToken&token=${tokenParam}`);
+            const data = await res.json();
             if (data.valid) {
               setVaga(data.vaga || '');
               if (data.nome) {
@@ -279,12 +280,19 @@
               setTokenError(data.message || 'Link inválido ou expirado. Por favor, solicite um novo ao RH.');
               setIsValidatingToken(false);
             }
-          })
-          .catch(err => {
-            console.error("Erro ao validar token:", err);
-            setTokenError("Erro de conexão com o servidor de validação. Por favor, tente novamente mais tarde.");
-            setIsValidatingToken(false);
-          });
+          } catch (err) {
+            console.warn(`[Token] Tentativa de validação falhou (${retriesLeft} restantes):`, err);
+            if (retriesLeft > 1) {
+              // Espera progressiva (1.5s, 3s) antes de tentar novamente para absorver cold start do Apps Script
+              setTimeout(() => doValidateToken(retriesLeft - 1), (4 - retriesLeft) * 1500);
+            } else {
+              console.error("Erro definitivo ao validar token:", err);
+              setTokenError("Não foi possível conectar ao servidor de validação no momento. Por favor, tente recarregar a página ou contate o RH.");
+              setIsValidatingToken(false);
+            }
+          }
+        };
+        doValidateToken();
       }, []);
 
       useEffect(() => {
@@ -396,6 +404,7 @@
 
       const [successMessage, setSuccessMessage] = useState(null);
       const [isGenerating, setIsGenerating] = useState(false);
+      const [submitProgress, setSubmitProgress] = useState(''); // ✅ Mensagem de progresso dinâmica
 
       // Reset success/error messages after a while
       useEffect(() => {
@@ -530,6 +539,20 @@
         return `Salvador, ${day} de ${month} de ${year} — ${horaStr} (horário de Brasília)`;
       };
 
+      // Helper: fetch com timeout para evitar travar indefinidamente
+      const fetchComTimeout = async (url, options = {}, timeoutMs = 45000) => {
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), timeoutMs);
+        try {
+          const res = await fetch(url, { ...options, signal: controller.signal });
+          clearTimeout(timer);
+          return res;
+        } catch (err) {
+          clearTimeout(timer);
+          throw err;
+        }
+      };
+
       const generatePDF = async () => {
         if (!validateForm()) {
           setSuccessMessage(null);
@@ -540,6 +563,7 @@
 
         setIsGenerating(true);
         setSuccessMessage(null);
+        setSubmitProgress('Gerando PDF...');
 
         // ETAPA 1: Gerar o PDF e obter o base64 ANTES de enviar ao servidor
         // (o bloco try/catch do jsPDF vem mais abaixo e envolve tudo)
@@ -966,11 +990,13 @@
             const MAX_RETRIES_DATA = 4;   // mais tentativas para dados (operação leve)
             let serverSuccess = false;
             let lastServerError = null;
+            setSubmitProgress('Enviando dados ao servidor...');
 
             for (let attempt = 1; attempt <= MAX_RETRIES_DATA; attempt++) {
               try {
                 console.log(`[ETAPA 2] Tentativa ${attempt}/${MAX_RETRIES_DATA} — registrando dados no servidor (sem PDF)...`);
-                const submitResponse = await fetch(APPS_SCRIPT_URL, {
+                if (attempt > 1) setSubmitProgress(`Reenviando dados... (tentativa ${attempt}/${MAX_RETRIES_DATA})`);
+                const submitResponse = await fetchComTimeout(APPS_SCRIPT_URL, {
                   method: 'POST',
                   body: JSON.stringify({
                     action: 'submitForm',
@@ -978,7 +1004,7 @@
                     formData: submissionFormData
                     // ✅ pdfBase64 AUSENTE — envio leve e rápido
                   })
-                });
+                }, 45000);
                 const submitResult = await submitResponse.json();
                 console.log('[ETAPA 2] Resposta do servidor:', submitResult);
 
@@ -992,7 +1018,20 @@
                     // Formulário já foi enviado anteriormente — tratar como sucesso
                     serverSuccess = true;
                     console.log('ℹ️ [ETAPA 2] Formulário já registrado anteriormente.');
+                    break;
                   }
+
+                  // Se o erro for de concorrência, lock ou servidor ocupado, NÃO desistir: aguardar e retentar
+                  const isLockOrBusy = submitResult.code === 'LOCK_TIMEOUT' ||
+                    lastServerError.includes('outra submissão') ||
+                    lastServerError.includes('ocupado') ||
+                    lastServerError.includes('Aguarde');
+                  if (isLockOrBusy && attempt < MAX_RETRIES_DATA) {
+                    console.warn(`[ETAPA 2] Servidor ocupado ou com lock ativo (tentativa ${attempt}/${MAX_RETRIES_DATA}). Aguardando para retentar...`);
+                    await new Promise(resolve => setTimeout(resolve, attempt * 2000));
+                    continue;
+                  }
+
                   break; // erro definitivo do servidor — não fazer retry
                 }
               } catch (err) {
@@ -1032,14 +1071,15 @@
               for (let pdfAttempt = 1; pdfAttempt <= MAX_RETRIES_PDF; pdfAttempt++) {
                 try {
                   console.log(`[ETAPA 3] Tentativa ${pdfAttempt}/${MAX_RETRIES_PDF} — enviando PDF ao Drive...`);
-                  const pdfResponse = await fetch(APPS_SCRIPT_URL, {
+                  setSubmitProgress(`Enviando PDF ao servidor... (${pdfAttempt}/${MAX_RETRIES_PDF})`);
+                  const pdfResponse = await fetchComTimeout(APPS_SCRIPT_URL, {
                     method: 'POST',
                     body: JSON.stringify({
                       action: 'uploadPDF',
                       token: token,
                       pdfBase64: pdfBase64
                     })
-                  });
+                  }, 60000); // 60s para PDF (maior)
                   const pdfResult = await pdfResponse.json();
                   if (pdfResult.success && pdfResult.pdfUrl) {
                     console.log('✅ [ETAPA 3] PDF salvo no Drive com sucesso:', pdfResult.pdfUrl);
@@ -1067,6 +1107,7 @@
           setErrors({ global: 'Ocorreu um erro ao gerar o PDF. Veja os detalhes no console do navegador.' });
         } finally {
           setIsGenerating(false);
+          setSubmitProgress('');
         }
       };
 
@@ -2368,7 +2409,7 @@
                       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                       <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                     </svg>
-                    Gerando PDF...
+                    {submitProgress || 'Gerando PDF...'}
                   </>
                 ) : (
                   <>

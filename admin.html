@@ -896,6 +896,13 @@
         </div>
       </div>
 
+      <!-- BANNER DE STATUS DO BACKEND (oculto por padrão) -->
+      <div id="backendStatusBanner" style="display:none; align-items:center; gap:12px; background:#fef2f2; border:1.5px solid #fca5a5; border-radius:10px; padding:12px 18px; margin:0 0 16px 0; color:#dc2626; font-size:13px; font-weight:500;">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20" style="flex-shrink:0;"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+        <span id="backendStatusMsg">Não foi possível conectar ao servidor. Verifique sua conexão ou aguarde alguns minutos.</span>
+        <button onclick="pingBackend()" style="margin-left:auto; padding:6px 14px; background:#dc2626; color:white; border-radius:6px; font-size:12px; font-weight:600; cursor:pointer; border:none;">Tentar Novamente</button>
+      </div>
+
       <div class="content-scroll">
         <!-- DASHBOARD -->
         <div id="viewDashboard">
@@ -1290,35 +1297,49 @@ let LOGO_PDF_BASE64 = "";
 let BRADESCO_LOGO_BASE64 = "";
 
 async function loadLogosFromIndex() {
+  // Fix performance: carrega logos de arquivos individuais
+  // em vez de fazer fetch do index.html inteiro (742 KB).
+
+  // Logo Premier (~65 KB PNG → data URI)
   try {
-    const res = await fetch('./index.html');
-    const htmlText = await res.text();
-    
-    // Extrai LOGO_PDF_BASE64 usando indexOf de forma ultra-rápida (evita travar a CPU com RegExp)
-    const pdfKey = 'const LOGO_PDF_BASE64 = "';
-    const pdfIdx = htmlText.indexOf(pdfKey);
-    if (pdfIdx !== -1) {
-      const start = pdfIdx + pdfKey.length;
-      const end = htmlText.indexOf('"', start);
-      if (end !== -1) {
-        LOGO_PDF_BASE64 = htmlText.substring(start, end);
-      }
-    }
-    
-    // Extrai BRADESCO_LOGO_BASE64 usando indexOf
-    const bradescoKey = 'const BRADESCO_LOGO_BASE64 = "';
-    const bradescoIdx = htmlText.indexOf(bradescoKey);
-    if (bradescoIdx !== -1) {
-      const start = bradescoIdx + bradescoKey.length;
-      const end = htmlText.indexOf('"', start);
-      if (end !== -1) {
-        BRADESCO_LOGO_BASE64 = htmlText.substring(start, end);
-      }
-    }
-    
-    console.log("Logos loaded from index.html successfully!");
+    const pngRes = await fetch('./Premier - Marca-04.png');
+    const pngBlob = await pngRes.blob();
+    LOGO_PDF_BASE64 = await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = reject;
+      reader.readAsDataURL(pngBlob);
+    });
+    console.log('[Logos] Premier logo carregado do PNG.');
   } catch (err) {
-    console.error("Failed to load logos from index.html:", err);
+    console.warn('[Logos] Falha ao carregar Premier logo:', err);
+  }
+
+  // Logo Bradesco (~227 KB arquivo dedicado base64)
+  try {
+    const bradescoRes = await fetch('./bradesco_logo_base64.txt');
+    if (!bradescoRes.ok) throw new Error('HTTP ' + bradescoRes.status);
+    const bradescoRaw = (await bradescoRes.text()).trim();
+    BRADESCO_LOGO_BASE64 = bradescoRaw.startsWith('data:') ? bradescoRaw : 'data:image/png;base64,' + bradescoRaw;
+    console.log('[Logos] Bradesco logo carregado do arquivo dedicado.');
+  } catch (err) {
+    console.warn('[Logos] Falha ao carregar Bradesco logo do arquivo dedicado, tentando fallback do index.html:', err);
+    try {
+      const idxRes = await fetch('./index.html');
+      const idxText = await idxRes.text();
+      const bradescoKey = 'const BRADESCO_LOGO_BASE64 = "';
+      const bIdx = idxText.indexOf(bradescoKey);
+      if (bIdx !== -1) {
+        const start = bIdx + bradescoKey.length;
+        const end = idxText.indexOf('"', start);
+        if (end !== -1) {
+          BRADESCO_LOGO_BASE64 = idxText.substring(start, end);
+          console.log('[Logos] Bradesco logo carregado via fallback do index.html.');
+        }
+      }
+    } catch(fallbackErr) {
+      console.warn('[Logos] Falha no fallback do Bradesco logo:', fallbackErr);
+    }
   }
 }
 loadLogosFromIndex();
@@ -1350,7 +1371,9 @@ function doLogin() {
       sessionStorage.setItem('rh_auth', '1');
       document.getElementById('loginPage').style.display = 'none';
       document.getElementById('app').style.display = 'block';
-      loadCandidates();
+      pingBackend(); // ✅ Verifica saúde do backend logo ao entrar
+      loadCandidates(true);
+      iniciarAutoRefresh();
     } else {
       btn.innerHTML = originalHtml;
       btn.disabled = false;
@@ -1399,9 +1422,22 @@ function setView(v) {
 }
 
 // ============================================================
-// API
+// API — com timeout (45s) e retry automático (até 2x)
 // ============================================================
-async function apiGet(params) {
+async function fetchComTimeout(url, options = {}, timeoutMs = 45000) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const res = await fetch(url, { ...options, signal: controller.signal, redirect: 'follow' });
+    clearTimeout(timer);
+    return res;
+  } catch (err) {
+    clearTimeout(timer);
+    throw err;
+  }
+}
+
+async function apiGet(params, maxRetries = 2) {
   if (!APPS_SCRIPT_URL || APPS_SCRIPT_URL.includes('COLE')) {
     showToast('⚠️ Configure a URL do Apps Script em admin.html', 'warning', 6000);
     throw new Error('Apps Script URL não configurada');
@@ -1409,14 +1445,63 @@ async function apiGet(params) {
   const url = new URL(APPS_SCRIPT_URL);
   url.searchParams.set('secret', ADMIN_SECRET);
   Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, v));
-  const res = await fetch(url.toString(), { redirect: 'follow' });
-  return res.json();
+
+  let lastErr;
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      const res = await fetchComTimeout(url.toString());
+      return res.json();
+    } catch (err) {
+      lastErr = err;
+      console.warn(`[apiGet] Tentativa ${attempt}/${maxRetries} falhou:`, err.message);
+      if (attempt < maxRetries) await new Promise(r => setTimeout(r, 2000 * attempt));
+    }
+  }
+  throw lastErr;
+}
+
+// ============================================================
+// HEALTH CHECK — Testa conectividade com o backend
+// ============================================================
+async function pingBackend() {
+  if (!APPS_SCRIPT_URL || APPS_SCRIPT_URL.includes('COLE')) return;
+  const banner = document.getElementById('backendStatusBanner');
+  try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 15000);
+    const url = new URL(APPS_SCRIPT_URL);
+    url.searchParams.set('action', 'ping');
+    const res = await fetch(url.toString(), { signal: controller.signal, redirect: 'follow' });
+    clearTimeout(timer);
+    const data = await res.json();
+    if (data && data.ok) {
+      if (banner) banner.style.display = 'none';
+      const syncStatus = document.getElementById('topbarSyncStatus');
+      if (syncStatus) { syncStatus.textContent = 'Sistema Ativo ✓'; syncStatus.style.color = '#10b981'; }
+    } else {
+      throw new Error('Resposta inesperada do servidor');
+    }
+  } catch (err) {
+    console.warn('[Ping] Backend indisponível:', err.message);
+    if (banner) {
+      banner.style.display = 'flex';
+      const msg = err.name === 'AbortError'
+        ? '⏱️ O servidor demorou mais de 15s para responder. O sistema pode estar lento — tente recarregar.'
+        : '⚠️ Não foi possível conectar ao servidor. Verifique sua conexão ou aguarde alguns minutos.';
+      banner.querySelector('#backendStatusMsg').textContent = msg;
+    }
+    const syncStatus = document.getElementById('topbarSyncStatus');
+    if (syncStatus) { syncStatus.textContent = 'Offline / Erro'; syncStatus.style.color = '#ef4444'; }
+  }
 }
 
 // ============================================================
 // CARREGAR CANDIDATOS
+// doSync=true: dispara syncStatuses em background após carregar
+//              (corrige candidatos que preencheram mas ficaram Pendente)
+// doSync=false: apenas recarrega a lista (usado pelo auto-refresh)
 // ============================================================
-async function loadCandidates() {
+async function loadCandidates(doSync = true) {
   const btn = document.getElementById('btnRefresh');
   btn.classList.add('spinning');
 
@@ -1470,6 +1555,18 @@ async function loadCandidates() {
     }
     const syncStatus = document.getElementById('topbarSyncStatus');
     if (syncStatus) syncStatus.textContent = 'Sistema Ativo';
+
+    // Fix 2: Sync automático em background — corrige candidatos que
+    // preencheram a ficha mas ficaram como Pendente por timeout do Apps Script
+    if (doSync && !APPS_SCRIPT_URL.includes('COLE')) {
+      apiGet({ action: 'syncStatuses' }).then(sync => {
+        if (sync && sync.updated > 0) {
+          showToast(`🔄 ${sync.updated} candidato(s) atualizados para Concluído`, 'success', 5000);
+          // Recarrega lista sem disparar novo sync (doSync=false)
+          loadCandidates(false);
+        }
+      }).catch(() => {}); // silencioso — não bloqueia o painel
+    }
   } catch(e) {
     console.error('Erro na conexão com o Apps Script:', e);
     if (!APPS_SCRIPT_URL.includes('COLE')) {
@@ -2154,6 +2251,8 @@ async function generateCandidateLocalPDF(token, nome) {
       showToast('📄 Abrindo PDF oficial assinado...', 'success');
       return;
     }
+
+    showToast('📄 Gerando PDF oficial a partir dos dados cadastrados...', 'info', 4000);
     const vaga = cand ? cand.vaga : '';
     const vagaLower = (vaga || '').toLowerCase();
     const hasHealthPlan = vagaLower.includes('1268') || vagaLower.includes('158') || vagaLower.includes('salvador') || vagaLower.includes('teca');
@@ -2666,6 +2765,11 @@ async function viewDetails(token, nome) {
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
         📎 Abrir PDF da Ficha
       </a>`;
+    } else {
+      footer.innerHTML += `<button class="btn-download-pdf" onclick="generateCandidateLocalPDF('${esc(token)}', '${esc(nome)}')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+        📥 Gerar / Baixar PDF da Ficha
+      </button>`;
     }
 
     document.getElementById('detailsModalBody').innerHTML = `
@@ -3267,15 +3371,23 @@ function showToast(msg, type = 'info', dur = 3500) {
 }
 
 // ============================================================
-// AUTO-REFRESH (a cada 60 segundos)
+// AUTO-REFRESH a cada 2 minutos
+// Usa doSync=true para corrigir status indevidos automaticamente
 // ============================================================
-if (sessionStorage.getItem('rh_auth') === '1') {
-  setInterval(loadCandidates, 60000);
+let _autoRefreshTimer = null;
+function iniciarAutoRefresh() {
+  if (_autoRefreshTimer) clearInterval(_autoRefreshTimer);
+  _autoRefreshTimer = setInterval(() => {
+    if (sessionStorage.getItem('rh_auth') === '1') {
+      loadCandidates(true); // com syncStatuses em background
+    }
+  }, 2 * 60 * 1000); // 2 minutos
 }
 
 // Inicializar se já logado
 if (sessionStorage.getItem('rh_auth') === '1') {
-  loadCandidates();
+  loadCandidates(true);
+  iniciarAutoRefresh();
 }
 </script>
 </body>

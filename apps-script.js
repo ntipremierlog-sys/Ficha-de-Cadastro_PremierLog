@@ -324,12 +324,12 @@ function submitForm(data) {
 
   // ============================================================
   // LOCK ESCOPO 1: verificar status e reservar o token
-  // Lock curto — apenas leitura do candidato.
+  // Lock com timeout de 30s para absorver picos de submissões simultâneas.
   // Não usar return dentro do try para evitar estados inconsistentes.
   // ============================================================
   var lock = LockService.getScriptLock();
   var lockObtido = false;
-  try { lockObtido = lock.tryLock(15000); } catch(e) {}
+  try { lockObtido = lock.tryLock(30000); } catch(e) {}
 
   if (!lockObtido) {
     return {
@@ -374,36 +374,21 @@ function submitForm(data) {
   }
 
   // ============================================================
-  // SALVAR PDF NO GOOGLE DRIVE — FORA DO LOCK (operação lenta)
-  // Múltiplas submissões podem gerar PDFs em paralelo.
+  // PDF é gerado exclusivamente via uploadPDF (etapa 3 do front-end).
+  // O submitForm grava apenas os dados textuais — sem pdfBase64.
+  // Isso evita duplicidade, reduz tempo de execução e elimina
+  // o risco de timeout por payload grande no submitForm.
   // ============================================================
-  var pdfUrl   = '';
+  var pdfUrl   = ''; // preenchido depois pelo uploadPDF
   var pdfError = '';
-  if (data.pdfBase64 && candidateName) {
-    try {
-      var base64Data = data.pdfBase64.split(';base64,')[1] || data.pdfBase64;
-      var pdfBytes   = Utilities.base64Decode(base64Data);
-      var pdfBlob    = Utilities.newBlob(pdfBytes, 'application/pdf',
-        'Ficha_Cadastro_' + candidateName.replace(/\s+/g, '_').substring(0, 30) + '.pdf');
-      var folder = DriveApp.getFolderById(CONFIG.DRIVE_FOLDER_ID);
-      var file   = folder.createFile(pdfBlob);
-      file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
-      pdfUrl = 'https://drive.google.com/file/d/' + file.getId() + '/view';
-      Logger.log('PDF salvo no Drive: ' + pdfUrl);
-    } catch (pdfErr) {
-      pdfError = pdfErr.message;
-      Logger.log('⚠️ Erro ao salvar PDF (não crítico): ' + pdfError);
-      _registrarErro(ss, token, candidateName, 'PDF_FALHOU', pdfError);
-    }
-  }
 
   // ============================================================
   // LOCK ESCOPO 2: gravar dados na planilha (appendRow + status)
-  // Lock curto — apenas escritas na planilha de Respostas e Candidatos.
+  // Lock com timeout de 30s para garantir conclusão sem descarte de submissão.
   // ============================================================
   var lock2 = LockService.getScriptLock();
   var lock2Obtido = false;
-  try { lock2Obtido = lock2.tryLock(15000); } catch(e) {}
+  try { lock2Obtido = lock2.tryLock(30000); } catch(e) {}
 
   if (!lock2Obtido) {
     _registrarErro(ss, token, candidateName, 'LOCK2_TIMEOUT', 'Não foi possível obter lock para gravar resposta');
@@ -512,6 +497,15 @@ function submitForm(data) {
       ];
     }
 
+    // ✅ FIX: Gravar status Concluído ANTES do appendRow.
+    // Garante que, mesmo se houver timeout durante os retries do appendRow,
+    // o painel de controle já mostra o candidato como Concluído.
+    // O uploadPDF (etapa separada do front-end) gravará o pdfUrl depois.
+    cSheet.getRange(candidateRow, 6).setValue('Concluído');
+    cSheet.getRange(candidateRow, 8).setValue(now);
+    SpreadsheetApp.flush();
+    Logger.log('✅ Status Concluído gravado ANTES do appendRow para: ' + candidateName);
+
     // Retry até 3 tentativas no appendRow
     var respostaSalva = false;
     var respostaErro  = '';
@@ -533,25 +527,12 @@ function submitForm(data) {
       var errMsg = 'Falha ao gravar dados após 3 tentativas: ' + respostaErro;
       Logger.log('❌ ' + errMsg);
       _registrarErro(ss, token, candidateName, 'RESPOSTA_NAO_SALVA', errMsg);
-      return {
-        success: false,
-        responseError: errMsg,
-        message: 'Erro interno ao salvar respostas. Tente novamente. Se persistir, contate o RH.',
-        pdfUrl: pdfUrl,
-        pdfError: pdfError
-      };
+      // Nota: status já está como Concluído — auditarRespostasFaltantes detecta este caso
     }
 
-    // Gravar status Concluído APÓS confirmação da gravação em Respostas
-    cSheet.getRange(candidateRow, 6).setValue('Concluído');
-    cSheet.getRange(candidateRow, 8).setValue(now);
-    if (pdfUrl) cSheet.getRange(candidateRow, 9).setValue(pdfUrl);
-    SpreadsheetApp.flush();
-    Logger.log('✅ Status Concluído gravado para: ' + candidateName);
-
     return {
-      success: true,
-      message: 'Formulário recebido com sucesso!',
+      success: respostaSalva,
+      message: respostaSalva ? 'Formulário recebido com sucesso!' : 'Status salvo mas houve erro ao gravar detalhes. Contate o RH.',
       pdfUrl: pdfUrl,
       pdfError: pdfError
     };
@@ -768,9 +749,19 @@ function ensureSheets() {
             .setFontWeight('bold').setBackground('#211551').setFontColor('white');
           Logger.log('✅ ensureSheets: Coluna RegistradoPor adicionada à aba Candidatos.');
         }
+
+        // Garante que a coluna PDFUrl (coluna 9) tenha o cabeçalho preenchido
+        if (csLastCol >= 9) {
+          var col9Header = String(csHeaders[8] || '').trim();
+          if (!col9Header) {
+            cs.getRange(1, 9).setValue('PDFUrl')
+              .setFontWeight('bold').setBackground('#211551').setFontColor('white');
+            Logger.log('✅ ensureSheets: Cabeçalho PDFUrl restaurado na coluna 9 de Candidatos.');
+          }
+        }
       }
     } catch(e) {
-      Logger.log('Erro ao checar coluna RegistradoPor: ' + e.message);
+      Logger.log('Erro ao checar colunas de Candidatos: ' + e.message);
     }
   }
 
@@ -806,9 +797,17 @@ function ensureSheets() {
             rs.getRange(1, lastCol + 1).setValue('RaçaCor').setFontWeight('bold').setBackground('#211551').setFontColor('white');
           }
         }
+
+        // Garante que a última coluna de Respostas tenha o cabeçalho PDFUrl
+        var lastRHeader = String(rHeaders[lastCol - 1] || '').trim();
+        if (!lastRHeader) {
+          rs.getRange(1, lastCol).setValue('PDFUrl')
+            .setFontWeight('bold').setBackground('#211551').setFontColor('white');
+          Logger.log('✅ ensureSheets: Cabeçalho PDFUrl restaurado na última coluna de Respostas.');
+        }
       }
     } catch(e) {
-      Logger.log('Erro ao checar coluna RaçaCor: ' + e.message);
+      Logger.log('Erro ao checar colunas de Respostas: ' + e.message);
     }
   }
 
