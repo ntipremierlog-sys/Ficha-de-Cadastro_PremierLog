@@ -1255,6 +1255,12 @@
         </select>
       </div>
       <div class="form-group" style="margin-top: 15px;">
+        <label class="form-label" for="exportContratante">Filtrar por Contratante / Responsável RH</label>
+        <select class="form-input" id="exportContratante" style="padding: 10px; border-radius: 8px; border: 1.5px solid var(--border); font-size: 13.5px; width: 100%; font-family: inherit; color: var(--text); background: white;">
+          <option value="todos">Todos os contratantes / RH</option>
+        </select>
+      </div>
+      <div class="form-group" style="margin-top: 15px;">
         <label class="form-label" for="exportStatus">Filtrar por Status</label>
         <select class="form-input" id="exportStatus" style="padding: 10px; border-radius: 8px; border: 1.5px solid var(--border); font-size: 13.5px; width: 100%; font-family: inherit; color: var(--text); background: white;">
           <option value="todos">Todos os status</option>
@@ -1428,11 +1434,19 @@ async function fetchComTimeout(url, options = {}, timeoutMs = 45000) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
-    const res = await fetch(url, { ...options, signal: controller.signal, redirect: 'follow' });
+    const res = await fetch(url, {
+      credentials: 'omit',
+      ...options,
+      signal: controller.signal,
+      redirect: 'follow'
+    });
     clearTimeout(timer);
     return res;
   } catch (err) {
     clearTimeout(timer);
+    if (err.name === 'AbortError') {
+      throw new Error(`Tempo limite esgotado (${timeoutMs / 1000}s). O servidor Google pode estar demorando para responder.`);
+    }
     throw err;
   }
 }
@@ -1450,11 +1464,44 @@ async function apiGet(params, maxRetries = 2) {
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
       const res = await fetchComTimeout(url.toString());
-      return res.json();
+      const contentType = (res.headers.get('content-type') || '').toLowerCase();
+      const text = await res.text();
+
+      let data;
+      try {
+        data = JSON.parse(text);
+      } catch (parseErr) {
+        const isHtml = text.trim().startsWith('<') || contentType.includes('text/html');
+        let msg = 'Erro ao processar resposta do servidor.';
+        if (isHtml) {
+          if (text.includes('accounts.google.com') || text.includes('ServiceLogin')) {
+            msg = 'O Google solicitou autenticação. Verifique se a implantação do Apps Script está configurada como "Qualquer pessoa" (inclusive anônimos).';
+          } else if (text.includes('ScriptError') || text.includes('exceeded') || text.includes('Exceeded maximum execution time')) {
+            msg = 'O Google Apps Script excedeu o tempo de execução no Google.';
+          } else {
+            msg = 'O Google Apps Script retornou uma página HTML em vez de dados JSON (instabilidade temporária do serviço).';
+          }
+        } else {
+          msg = `Resposta inesperada do servidor: ${text.slice(0, 100)}`;
+        }
+        const customErr = new Error(msg);
+        customErr.isHtml = isHtml;
+        customErr.rawText = text;
+        customErr.status = res.status;
+        throw customErr;
+      }
+
+      if (!res.ok && data && data.error) {
+        throw new Error(data.error);
+      }
+
+      return data;
     } catch (err) {
       lastErr = err;
       console.warn(`[apiGet] Tentativa ${attempt}/${maxRetries} falhou:`, err.message);
-      if (attempt < maxRetries) await new Promise(r => setTimeout(r, 2000 * attempt));
+      if (attempt < maxRetries) {
+        await new Promise(r => setTimeout(r, 1500 * attempt));
+      }
     }
   }
   throw lastErr;
@@ -1467,13 +1514,17 @@ async function pingBackend() {
   if (!APPS_SCRIPT_URL || APPS_SCRIPT_URL.includes('COLE')) return;
   const banner = document.getElementById('backendStatusBanner');
   try {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 15000);
     const url = new URL(APPS_SCRIPT_URL);
     url.searchParams.set('action', 'ping');
-    const res = await fetch(url.toString(), { signal: controller.signal, redirect: 'follow' });
-    clearTimeout(timer);
-    const data = await res.json();
+    const res = await fetchComTimeout(url.toString(), {}, 15000);
+    const contentType = (res.headers.get('content-type') || '').toLowerCase();
+    const text = await res.text();
+    let data;
+    try {
+      data = JSON.parse(text);
+    } catch (e) {
+      throw new Error('Servidor retornou resposta não-JSON no ping');
+    }
     if (data && data.ok) {
       if (banner) banner.style.display = 'none';
       const syncStatus = document.getElementById('topbarSyncStatus');
@@ -1485,9 +1536,9 @@ async function pingBackend() {
     console.warn('[Ping] Backend indisponível:', err.message);
     if (banner) {
       banner.style.display = 'flex';
-      const msg = err.name === 'AbortError'
+      const msg = err.name === 'AbortError' || (err.message && err.message.includes('Tempo limite'))
         ? '⏱️ O servidor demorou mais de 15s para responder. O sistema pode estar lento — tente recarregar.'
-        : '⚠️ Não foi possível conectar ao servidor. Verifique sua conexão ou aguarde alguns minutos.';
+        : '⚠️ Não foi possível conectar ao servidor (' + err.message + '). Verifique sua conexão ou aguarde alguns minutos.';
       banner.querySelector('#backendStatusMsg').textContent = msg;
     }
     const syncStatus = document.getElementById('topbarSyncStatus');
@@ -2060,6 +2111,17 @@ function formatDisplayDate(dateStr) {
   return dateStr;
 }
 
+function formatCPFDisplay(val) {
+  if (!val) return '—';
+  const digits = String(val).replace(/\D/g, '');
+  if (!digits) return String(val);
+  const padded = digits.length <= 11 ? digits.padStart(11, '0') : digits;
+  if (padded.length === 11) {
+    return padded.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4');
+  }
+  return padded;
+}
+
 function renderRecentTable() {
   const tbody = document.getElementById('recentTableBody');
   if (!tbody) return;
@@ -2273,7 +2335,7 @@ async function generateCandidateLocalPDF(token, nome) {
       contatoEmergenciaNome: r.EmergenciaNome || r.EmergenciaContato || '',
       contatoEmergenciaTelefone: r.EmergenciaTel || r.EmergenciaTelefone || '',
       rg: r.RG || r.Rg || '',
-      cpf: r.CPF || r.Cpf || '',
+      cpf: formatCPFDisplay(r.CPF || r.Cpf || ''),
       tituloEleitor: r.TítuloEleitor || r.TituloEleitor || '',
       grauInstrucao: r.GrauInstrução || r.GrauInstrucao || '',
       possuiFilhos: r.PossuiFilhos || 'Não',
@@ -2287,12 +2349,20 @@ async function generateCandidateLocalPDF(token, nome) {
       camisaTamanho: r.TamanhoCamisa || '',
       calcaTamanho: r.TamanhoCalça || r.TamanhoCalca || '',
       racaCor: r['RaçaCor'] || r.RacaCor || '',
+      pcdDeclaracao: r.PcD || r.pcdDeclaracao || r['PESSOA COM DEFICIÊNCIA (PcD)'] || r.PessoaComDeficiencia || '',
+      necessitaRecursoAcessibilidade: r.NecessitaAcessibilidade || r.necessitaRecursoAcessibilidade || '',
+      recursoAcessibilidadeDescricao: r.RecursoAcessibilidade || r.recursoAcessibilidadeDescricao || '',
       optanteVT: r.OptanteVT || 'Não',
-      planoSaudeOpcao: 'a',
-      dependente1Nome: r.Dep1Nome || '',
-      dependente1Cpf: r.Dep1CPF || r.Dep1Cpf || '',
-      dependente2Nome: r.Dep2Nome || '',
-      dependente2Cpf: r.Dep2CPF || r.Dep2Cpf || '',
+      planoSaudeOpcao: (() => {
+        const p = String(r['PlanoSaúde'] || r.PlanoSaude || r.planoSaudeOpcao || '').trim().toLowerCase();
+        if (p === 'b' || p.includes('individual')) return 'b';
+        if (p === 'c' || p.includes('dependente') || p.includes('inclusão') || p.includes('inclusao')) return 'c';
+        return 'a';
+      })(),
+      dependente1Nome: r.Dep1Nome || r.dep1Nome || '',
+      dependente1Cpf: formatCPFDisplay(r.Dep1CPF || r.Dep1Cpf || r.dep1Cpf || ''),
+      dependente2Nome: r.Dep2Nome || r.dep2Nome || '',
+      dependente2Cpf: formatCPFDisplay(r.Dep2CPF || r.Dep2Cpf || r.dep2Cpf || ''),
       tipoAssinatura: r.TipoAssinatura || (r.AssinaturaBase64 ? 'desenho' : 'texto'),
       assinaturaDigitada: r.NomeCompleto || r.NomeCandidato || nome || '',
       assinaturaBase64: r.AssinaturaBase64 || r.assinaturaBase64 || ''
@@ -2308,7 +2378,7 @@ async function generateCandidateLocalPDF(token, nome) {
           let depParentesco = '';
           subparts.forEach(sp => {
             if (sp.toUpperCase().startsWith('CPF:')) {
-              depCpf = sp.substring(4).trim();
+              depCpf = formatCPFDisplay(sp.substring(4).trim());
             } else if (sp.toUpperCase().startsWith('PARENTESCO:')) {
               depParentesco = sp.substring(11).trim();
             }
@@ -2406,6 +2476,10 @@ async function generateCandidateLocalPDF(token, nome) {
     // 1. DADOS PESSOAIS
     drawSectionHeader("Dados Pessoais");
 
+    drawField("CARGO / FUNÇÃO PRETENDIDA", funcao || 'Não informado', marginX, 100);
+    drawField("UNIDADE / CONTRATO", contrato || 'Geral', marginX + 104, 82);
+    y += 8.5;
+
     drawField("NOME COMPLETO", formData.nomeCompleto, marginX, printableWidth);
     y += 8.5;
 
@@ -2423,6 +2497,17 @@ async function generateCandidateLocalPDF(token, nome) {
     y += 8.5;
 
     drawField("AUTODECLARAÇÃO RAÇA / COR", formData.racaCor || formData['RaçaCor'] || 'Não informado', marginX, printableWidth);
+    y += 13.0;
+
+    // 2.5 ACESSIBILIDADE E INCLUSÃO
+    drawSectionHeader("Informações de Acessibilidade e Inclusão");
+    drawField("PESSOA COM DEFICIÊNCIA (PcD)", formData.pcdDeclaracao || 'Não informado', marginX, 62);
+    if (formData.pcdDeclaracao === 'Sim') {
+      drawField("NECESSITA RECURSO DE ACESSIBILIDADE", formData.necessitaRecursoAcessibilidade || 'Não informado', marginX + 66, 56);
+      if (formData.necessitaRecursoAcessibilidade === 'Sim') {
+        drawField("RECURSO NECESSÁRIO", formData.recursoAcessibilidadeDescricao || 'Não informado', marginX + 126, 60);
+      }
+    }
     y += 13.0;
 
     // 2. DOCUMENTOS PESSOAIS
@@ -2793,11 +2878,21 @@ async function viewDetails(token, nome) {
           <div class="details-grid">
             <div class="detail-item full"><div class="dk">Nome Completo</div><div class="dv" style="font-weight:700;font-size:14px;color:var(--navy);">${esc(r.NomeCompleto)}</div></div>
             ${r.NomeSocial ? `<div class="detail-item full"><div class="dk">Nome Social</div><div class="dv">${esc(r.NomeSocial)}</div></div>` : ''}
-            <div class="detail-item"><div class="dk">CPF</div><div class="dv">${esc(r.CPF)}</div></div>
+            <div class="detail-item"><div class="dk">CPF</div><div class="dv">${esc(formatCPFDisplay(r.CPF))}</div></div>
             <div class="detail-item"><div class="dk">RG</div><div class="dv">${esc(r.RG)}</div></div>
             <div class="detail-item"><div class="dk">Raça / Cor</div><div class="dv">${esc(r['RaçaCor'] || r.RacaCor || 'Não informado')}</div></div>
             <div class="detail-item"><div class="dk">Estado Civil</div><div class="dv">${esc(r.EstadoCivil)}</div></div>
             <div class="detail-item"><div class="dk">Título de Eleitor</div><div class="dv">${esc(r.TítuloEleitor)}</div></div>
+            <div class="detail-item"><div class="dk">Pessoa com Deficiência (PcD)</div><div class="dv"><span class="badge ${r.PcD === 'Sim' || r.pcdDeclaracao === 'Sim' ? 'badge-pending' : 'badge-done'}">${esc(r.PcD || r.pcdDeclaracao || 'Não')}</span></div></div>
+            ${(r.PcD === 'Sim' || r.pcdDeclaracao === 'Sim') ? `
+              <div class="detail-item full" style="background:#fffbeb;padding:8px 12px;border-radius:8px;border:1px solid #fde68a;">
+                <div class="dk" style="color:#b45309;font-weight:700;">Acessibilidade / Recursos Especiais:</div>
+                <div class="dv" style="color:#92400e;margin-top:2px;">
+                  Necessita recurso: <strong>${esc(r.NecessitaAcessibilidade || r.necessitaRecursoAcessibilidade || 'Sim')}</strong>
+                  ${(r.RecursoAcessibilidade || r.recursoAcessibilidadeDescricao) ? ` — <em>${esc(r.RecursoAcessibilidade || r.recursoAcessibilidadeDescricao)}</em>` : ''}
+                </div>
+              </div>
+            ` : ''}
           </div>
         </div>
 
@@ -2827,7 +2922,21 @@ async function viewDetails(token, nome) {
             <div class="detail-item"><div class="dk">Número da Bota</div><div class="dv">${esc(r['NúmeroBota'] || 'N/A')}</div></div>
             <div class="detail-item"><div class="dk">Tamanho da Camisa</div><div class="dv">${esc(r.TamanhoCamisa || 'N/A')}</div></div>
             <div class="detail-item"><div class="dk">Tamanho da Calça</div><div class="dv">${esc(r['TamanhoCalça'] || 'N/A')}</div></div>
-            <div class="detail-item full"><div class="dk">Plano de Saúde</div><div class="dv" style="font-size:12px;line-height:1.5;color:var(--text-2);background:white;padding:8px 12px;border-radius:8px;border:1px solid #e2e8f0;">${esc(r['PlanoSaúde'])}</div></div>
+            <div class="detail-item full"><div class="dk">Plano de Saúde</div><div class="dv" style="font-size:12px;line-height:1.5;color:var(--text-2);background:white;padding:8px 12px;border-radius:8px;border:1px solid #e2e8f0;">
+              <strong>${(() => {
+                const val = String(r['PlanoSaúde'] || r.PlanoSaude || '').trim().toLowerCase();
+                if (val === 'a' || val.includes('não tenho interesse') || val.includes('nao tenho interesse')) return 'Não tenho interesse no plano de saúde.';
+                if (val === 'b' || val.includes('individual')) return 'Opto pelo plano de saúde individual.';
+                if (val === 'c' || val.includes('dependente') || val.includes('inclusão') || val.includes('inclusao')) return 'Opto pelo plano de saúde com inclusão de dependente(s).';
+                return esc(r['PlanoSaúde'] || r.PlanoSaude || 'Não informado');
+              })()}</strong>
+              ${(r.Dep1Nome || r.Dep2Nome) ? `
+                <div style="margin-top:6px;padding-top:6px;border-top:1px solid #e2e8f0;font-size:11.5px;color:var(--navy);">
+                  ${r.Dep1Nome ? `<div>• <strong>Dependente 01:</strong> ${esc(r.Dep1Nome)} ${r.Dep1CPF ? `(CPF: ${esc(r.Dep1CPF)})` : ''}</div>` : ''}
+                  ${r.Dep2Nome ? `<div>• <strong>Dependente 02:</strong> ${esc(r.Dep2Nome)} ${r.Dep2CPF ? `(CPF: ${esc(r.Dep2CPF)})` : ''}</div>` : ''}
+                </div>
+              ` : ''}
+            </div></div>
           </div>
         </div>
 
@@ -3077,6 +3186,25 @@ function openExportModal() {
       selExportContrato.appendChild(o);
     });
   }
+
+  // Populate contratantes/responsáveis in export modal
+  const selExportContratante = document.getElementById('exportContratante');
+  if (selExportContratante) {
+    const cadastrantes = new Set();
+    state.candidates.forEach(c => {
+      if (c.registradoPor && String(c.registradoPor).trim()) {
+        cadastrantes.add(String(c.registradoPor).trim());
+      }
+    });
+    const sortedCadastrantes = [...cadastrantes].sort();
+    selExportContratante.innerHTML = '<option value="todos">Todos os contratantes / RH</option>';
+    sortedCadastrantes.forEach(name => {
+      const o = document.createElement('option');
+      o.value = name;
+      o.textContent = name;
+      selExportContratante.appendChild(o);
+    });
+  }
   
   document.getElementById('exportStatus').value = 'todos';
   document.getElementById('exportModel').value = 'geral';
@@ -3128,6 +3256,7 @@ async function doExportExcel() {
     const startVal = document.getElementById('exportStartDate').value;
     const endVal = document.getElementById('exportEndDate').value;
     const selectedContrato = document.getElementById('exportContrato').value;
+    const selectedContratante = document.getElementById('exportContratante')?.value || 'todos';
     const selectedStatus = document.getElementById('exportStatus').value;
     const exportModel = document.getElementById('exportModel').value;
     
@@ -3162,13 +3291,18 @@ async function doExportExcel() {
         return contrato === selectedContrato;
       });
     }
+
+    // 2.1. Filtro de Contratante / Responsável RH
+    if (selectedContratante !== 'todos') {
+      filteredCandidates = filteredCandidates.filter(c => String(c.registradoPor || '').trim() === selectedContratante);
+    }
     
     // 3. Filtro de Status
     if (selectedStatus !== 'todos') {
       filteredCandidates = filteredCandidates.filter(c => c.status === selectedStatus);
     }
     
-    let isFiltered = (filterType !== 'todos' || selectedContrato !== 'todos' || selectedStatus !== 'todos');
+    let isFiltered = (filterType !== 'todos' || selectedContrato !== 'todos' || selectedContratante !== 'todos' || selectedStatus !== 'todos');
     
     const wb = XLSX.utils.book_new();
     const date = new Date().toLocaleDateString('pt-BR').replace(/\//g,'-');
@@ -3206,26 +3340,29 @@ async function doExportExcel() {
           return;
         }
 
-        // Mapear para o formato simplificado: Nome, CPF, Contrato, Opção de VT
+        // Mapear para o formato: Nome, CPF, Função, Contrato, Contratante, Opção de VT
         const beneficiosData = [
-          ['Nome', 'CPF', 'Contrato', 'Opção de VT'],
+          ['Nome', 'CPF', 'Função', 'Contrato', 'Contratante / Responsável', 'Opção de VT'],
           ...finalResponses.map(r => {
             const tokenVal = r.Token || r.token || '';
             const cand = state.candidates.find(c => c.token === tokenVal);
-            const vaga = cand ? cand.vaga : '';
-            const { contrato } = extractVagaParts(vaga);
+            const vaga = cand ? cand.vaga : (r.Vaga || '');
+            const { funcao, contrato } = extractVagaParts(vaga);
+            const contratante = cand?.registradoPor || r.Contratante || r.RegistradoPor || '';
             
             return [
               r.NomeCompleto || r.NomeCandidato || cand?.nome || '',
-              r.CPF || r.cpf || '',
+              formatCPFDisplay(r.CPF || r.cpf || ''),
+              funcao || '',
               contrato || '',
+              contratante || 'Não informado',
               r.OptanteVT || r.optanteVT || ''
             ];
           })
         ];
 
         const ws = XLSX.utils.aoa_to_sheet(beneficiosData);
-        ws['!cols'] = [35, 18, 25, 20].map(w => ({ wch: w }));
+        ws['!cols'] = [35, 18, 25, 25, 25, 20].map(w => ({ wch: w }));
         XLSX.utils.book_append_sheet(wb, ws, 'Benefícios');
 
         XLSX.writeFile(wb, `Premier_RH_Beneficios_${filenameType}_${date}.xlsx`);
@@ -3237,14 +3374,14 @@ async function doExportExcel() {
       // Modelo Geral (Aba 1 e Aba 2)
       // Aba 1: Controle de Candidatos
       const ctrlData = [
-        ['ID','Nome','E-mail','Função','Contrato','Token','Status','Data de Envio','Data de Preenchimento'],
+        ['ID','Nome','E-mail','Função','Contrato','Contratante / Responsável','Token','Status','Data de Envio','Data de Preenchimento'],
         ...filteredCandidates.map(c => {
           const { funcao, contrato } = extractVagaParts(c.vaga);
-          return [c.id, c.nome, c.email, funcao, contrato, c.token, c.status, c.dataEnvio, c.dataPreenchimento];
+          return [c.id, c.nome, c.email, funcao, contrato, c.registradoPor || 'Não informado', c.token, c.status, c.dataEnvio, c.dataPreenchimento];
         })
       ];
       const ws1 = XLSX.utils.aoa_to_sheet(ctrlData);
-      ws1['!cols'] = [10,30,35,25,25,26,12,18,18].map(w => ({ wch: w }));
+      ws1['!cols'] = [10,30,35,25,25,25,26,12,18,18].map(w => ({ wch: w }));
       XLSX.utils.book_append_sheet(wb, ws1, 'Controle de Candidatos');
 
       // Aba 2: Dados dos Formulários (busca do servidor)
@@ -3302,28 +3439,36 @@ async function doExportExcel() {
           }
           
           if (finalResponses.length > 0) {
-            // Vamos correlacionar cada resposta para obter a vaga do candidato e extrair Função e Contrato
+            // Vamos correlacionar cada resposta para obter a vaga do candidato e extrair Função, Contrato e Contratante
             const processedResponses = finalResponses.map(r => {
               const tokenVal = r.Token || r.token || '';
               const cand = state.candidates.find(c => c.token === tokenVal);
-              const vaga = cand ? cand.vaga : '';
+              const vaga = cand ? cand.vaga : (r.Vaga || '');
               const { funcao, contrato } = extractVagaParts(vaga);
+              const contratante = cand?.registradoPor || r.Contratante || r.RegistradoPor || '';
               
               const newObj = {};
               const keys = Object.keys(r);
               
               keys.forEach(k => {
-                newObj[k] = r[k] || '';
-                // Inserir Função e Contrato logo após NomeCandidato
-                if (k === 'NomeCandidato') {
-                  newObj['Função'] = funcao;
-                  newObj['Contrato'] = contrato;
-                }
+                 let val = r[k] || '';
+                 const kLower = k.toLowerCase().replace(/\s+/g, '');
+                 if (kLower === 'cpf' || kLower === 'dep1cpf' || kLower === 'dep2cpf') {
+                   val = formatCPFDisplay(val);
+                 }
+                 newObj[k] = val;
+                 // Inserir Função, Contrato e Contratante logo após NomeCandidato
+                 if (k === 'NomeCandidato') {
+                   newObj['Função'] = funcao;
+                   newObj['Contrato'] = contrato;
+                   newObj['Contratante'] = contratante || 'Não informado';
+                 }
               });
               
               if (!newObj.hasOwnProperty('Função')) {
                 newObj['Função'] = funcao;
                 newObj['Contrato'] = contrato;
+                newObj['Contratante'] = contratante || 'Não informado';
               }
               
               return newObj;

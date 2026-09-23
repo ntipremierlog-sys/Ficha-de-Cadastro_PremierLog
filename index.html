@@ -268,7 +268,7 @@
 
         const doValidateToken = async (retriesLeft = 3) => {
           try {
-            const res = await fetch(`${APPS_SCRIPT_URL}?action=validateToken&token=${tokenParam}`);
+            const res = await fetch(`${APPS_SCRIPT_URL}?action=validateToken&token=${tokenParam}`, { credentials: 'omit' });
             const data = await res.json();
             if (data.valid) {
               setVaga(data.vaga || '');
@@ -544,7 +544,7 @@
         const controller = new AbortController();
         const timer = setTimeout(() => controller.abort(), timeoutMs);
         try {
-          const res = await fetch(url, { ...options, signal: controller.signal });
+          const res = await fetch(url, { credentials: 'omit', ...options, signal: controller.signal });
           clearTimeout(timer);
           return res;
         } catch (err) {
@@ -643,6 +643,19 @@
 
           // 2. DADOS PESSOAIS
           drawSectionHeader("Dados Pessoais");
+
+          // Informações de Cargo e Contrato
+          const { funcao: vagaFuncao, contrato: vagaContrato } = (() => {
+            const str = String(vaga || '').trim();
+            if (!str) return { funcao: 'Não informado', contrato: 'Geral' };
+            const idx = str.indexOf(' - ');
+            if (idx === -1) return { funcao: str, contrato: 'Geral' };
+            return { funcao: str.substring(0, idx).trim(), contrato: str.substring(idx + 3).trim() };
+          })();
+
+          drawField("CARGO / FUNÇÃO PRETENDIDA", vagaFuncao, marginX, 100);
+          drawField("UNIDADE / CONTRATO", vagaContrato, marginX + 104, 82);
+          y += 10.0;
 
           drawField("NOME COMPLETO", formData.nomeCompleto, marginX, 120);
           drawField("NOME SOCIAL", formData.nomeSocial || 'Não informado', marginX + 124, 62);

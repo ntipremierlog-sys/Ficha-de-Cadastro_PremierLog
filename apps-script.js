@@ -59,6 +59,7 @@ function doGet(e) {
       case 'bulkConcluirByDate':      return jsonResponse(bulkConcluirByDate(e.parameter.secret, e.parameter.dataLimite));
       case 'excluirPendentesPorData': return jsonResponse(excluirPendentesPorData(e.parameter.secret, e.parameter.dataLimite || '13/09/2026'));
       case 'auditarRespostasFaltantes': return jsonResponse(auditarRespostasFaltantes(e.parameter.secret));
+      case 'syncVagaEContratante':    return jsonResponse(syncVagaEContratanteEmRespostas(e.parameter.secret));
       default:                        return jsonResponse({ error: 'Ação inválida: ' + action });
     }
   } catch (err) {
@@ -339,11 +340,13 @@ function submitForm(data) {
     };
   }
 
-  var candidateName    = '';
-  var candidateRow     = -1;
-  var candidateEmail   = '';
-  var now              = formatDate(new Date());
-  var alreadySubmitted = false; // flag: não usar return dentro do try com lock
+  var candidateName          = '';
+  var candidateRow           = -1;
+  var candidateEmail         = '';
+  var candidateVaga          = '';
+  var candidateRegistradoPor = '';
+  var now                    = formatDate(new Date());
+  var alreadySubmitted       = false; // flag: não usar return dentro do try com lock
 
   try {
     var cData    = cSheet.getDataRange().getValues();
@@ -354,9 +357,11 @@ function submitForm(data) {
         if (String(cData[i][5] || '').trim() === 'Concluído') {
           alreadySubmitted = true; // ✅ flag em vez de return direto
         } else {
-          candidateName  = cData[i][1];
-          candidateEmail = cData[i][2] || '';
-          candidateRow   = i + 1;
+          candidateName          = cData[i][1];
+          candidateEmail         = cData[i][2] || '';
+          candidateVaga          = cData[i][3] || '';
+          candidateRegistradoPor = cData[i][9] || '';
+          candidateRow           = i + 1;
         }
         break;
       }
@@ -413,9 +418,14 @@ function submitForm(data) {
 
     var fd    = data.formData || {};
 
-    // ── Helper: remove máscara de CPF/doc (deixa apenas dígitos) ──────────
+    // ── Helper: formata CPF preservando 11 dígitos como texto (evita perda do zero inicial no Sheets) ──
     function stripMask(val) {
-      return String(val || '').replace(/\D/g, '');
+      var digits = String(val || '').replace(/\D/g, '');
+      if (!digits) return '';
+      if (digits.length <= 11) {
+        digits = ("00000000000" + digits).slice(-11);
+      }
+      return "'" + digits;
     }
 
     var depIR = (fd.dependentesIR || []).map(function(d) {
@@ -428,6 +438,12 @@ function submitForm(data) {
       'token': token,
       'datapreenchimento': now,
       'nomecandidato': candidateName,
+      'vaga': candidateVaga || fd.vaga || '',
+      'cargo': candidateVaga || fd.vaga || '',
+      'funcao': candidateVaga || fd.vaga || '',
+      'contratante': candidateRegistradoPor || fd.registradoPor || '',
+      'registradopor': candidateRegistradoPor || fd.registradoPor || '',
+      'cadastradopor': candidateRegistradoPor || fd.registradoPor || '',
       'nomecompleto': fd.nomeCompleto || '',
       'nomesocial': fd.nomeSocial || '',
       'cpf': stripMask(fd.cpf),
@@ -436,6 +452,14 @@ function submitForm(data) {
       'racacor': fd.racaCor || '',
       'raça / cor': fd.racaCor || '',
       'raca / cor': fd.racaCor || '',
+      'pcd': fd.pcdDeclaracao || '',
+      'pcddeclaracao': fd.pcdDeclaracao || '',
+      'pessoacomdeficiencia': fd.pcdDeclaracao || '',
+      'pessoacomdeficiência': fd.pcdDeclaracao || '',
+      'necessitaacessibilidade': fd.necessitaRecursoAcessibilidade || '',
+      'necessitarecursoacessibilidade': fd.necessitaRecursoAcessibilidade || '',
+      'recursoacessibilidade': fd.recursoAcessibilidadeDescricao || '',
+      'recursoacessibilidadedescricao': fd.recursoAcessibilidadeDescricao || '',
       'endereço': fd.endereco || '',
       'endereco': fd.endereco || '',
       'bairrocidade': fd.bairroCidade || '',
@@ -480,9 +504,12 @@ function submitForm(data) {
     if (rowData.length === 0) {
       rowData = [
         token, now, candidateName,
+        candidateVaga || fd.vaga || '',
+        candidateRegistradoPor || fd.registradoPor || '',
         fd.nomeCompleto || '', fd.nomeSocial || '',
         stripMask(fd.cpf), fd.rg || '',    // ← CPF sem máscara
         fd.racaCor || '',
+        fd.pcdDeclaracao || '', fd.necessitaRecursoAcessibilidade || '', fd.recursoAcessibilidadeDescricao || '',
         fd.endereco || '', fd.bairroCidade || '', fd.cep || '',
         fd.whatsapp || '', fd.email || '',
         fd.contatoEmergenciaNome || '', fd.contatoEmergenciaTelefone || '',
@@ -661,36 +688,6 @@ function _registrarErro(ss, token, nome, tipoErro, mensagem) {
 
 
 // ============================================================
-// FUNÇÃO: Excluir Candidato (admin)
-// ============================================================
-function deleteCandidate(token, secret) {
-  if (secret !== CONFIG.ADMIN_SECRET) return { error: 'Não autorizado' };
-  var ss    = SpreadsheetApp.openById(CONFIG.SPREADSHEET_ID);
-  var sheet = ss.getSheetByName(SHEET_CANDIDATES);
-  var data  = sheet.getDataRange().getValues();
-
-  for (var i = 1; i < data.length; i++) {
-    if (data[i][4] === token) { 
-      sheet.deleteRow(i + 1); 
-      
-      // Também remover da aba Respostas se existir
-      var rSheet = ss.getSheetByName(SHEET_RESPONSES);
-      if (rSheet) {
-        var rData = rSheet.getDataRange().getValues();
-        for (var j = 1; j < rData.length; j++) {
-          if (rData[j][0] === token) {
-            rSheet.deleteRow(j + 1);
-            break;
-          }
-        }
-      }
-      return { success: true }; 
-    }
-  }
-  return { error: 'Candidato não encontrado' };
-}
-
-// ============================================================
 // AUXILIARES
 // ============================================================
 function generateToken() {
@@ -769,12 +766,13 @@ function ensureSheets() {
   var rs = ss.getSheetByName(SHEET_RESPONSES);
   if (!rs) rs = ss.insertSheet(SHEET_RESPONSES);
   if (rs.getLastRow() === 0) {
-    rs.appendRow(['Token','DataPreenchimento','NomeCandidato','NomeCompleto','NomeSocial','CPF','RG',
-      'RaçaCor','Endereço','BairroCidade','CEP','WhatsApp','Email','EmergenciaNome','EmergenciaTel',
+    rs.appendRow(['Token','DataPreenchimento','NomeCandidato','Vaga','Contratante','NomeCompleto','NomeSocial','CPF','RG',
+      'RaçaCor','PcD','NecessitaAcessibilidade','RecursoAcessibilidade','Endereço','BairroCidade','CEP','WhatsApp','Email','EmergenciaNome','EmergenciaTel',
       'TítuloEleitor','GrauInstrução','PossuiFilhos','QtdFilhos','DeclararIR','QtdDepIR',
       'DependentesIR','EstadoCivil','EstadoCivilOutro','NúmeroBota','TamanhoCamisa',
       'TamanhoCalça','OptanteVT','PlanoSaúde','Dep1Nome','Dep1CPF','Dep2Nome','Dep2CPF','TipoAssinatura','PDFUrl']);
     rs.setFrozenRows(1);
+    rs.setFrozenColumns(3);
     rs.getRange('1:1').setFontWeight('bold').setBackground('#211551').setFontColor('white');
   } else {
     // Garante que a coluna RaçaCor exista no cabeçalho se a planilha já foi criada anteriormente
@@ -799,12 +797,102 @@ function ensureSheets() {
           }
         }
 
+        // Garante que as colunas de PcD e Acessibilidade existam no cabeçalho
+        var hasPcd = rHeaders.some(function(h) {
+          var k = String(h || '').toLowerCase();
+          return k.indexOf('pcd') !== -1 || k.indexOf('defici') !== -1;
+        });
+        if (!hasPcd) {
+          var racaIdx = -1;
+          for (var c2 = 0; c2 < rHeaders.length; c2++) {
+            var hKey = String(rHeaders[c2] || '').toLowerCase();
+            if (hKey.indexOf('raça') !== -1 || hKey.indexOf('raca') !== -1) { racaIdx = c2 + 1; break; }
+          }
+          if (racaIdx !== -1) {
+            rs.insertColumnsAfter(racaIdx, 3);
+            rs.getRange(1, racaIdx + 1, 1, 3).setValues([['PcD', 'NecessitaAcessibilidade', 'RecursoAcessibilidade']])
+              .setFontWeight('bold').setBackground('#211551').setFontColor('white');
+            Logger.log('✅ ensureSheets: Colunas de PcD e Acessibilidade inseridas após RaçaCor.');
+          } else {
+            var newCol = rs.getLastColumn() + 1;
+            rs.getRange(1, newCol, 1, 3).setValues([['PcD', 'NecessitaAcessibilidade', 'RecursoAcessibilidade']])
+              .setFontWeight('bold').setBackground('#211551').setFontColor('white');
+            Logger.log('✅ ensureSheets: Colunas de PcD e Acessibilidade adicionadas ao final.');
+          }
+        }
+
+        // Garante que a coluna Vaga exista no cabeçalho de Respostas
+        var hasVaga = rHeaders.some(function(h) {
+          var k = String(h || '').toLowerCase().trim();
+          return k === 'vaga' || k === 'cargo' || k === 'função' || k === 'funcao';
+        });
+        if (!hasVaga) {
+          var nomeIdx = -1;
+          for (var c3 = 0; c3 < rHeaders.length; c3++) {
+            var hName = String(rHeaders[c3] || '').toLowerCase().trim();
+            if (hName === 'nomecandidato') { nomeIdx = c3 + 1; break; }
+          }
+          if (nomeIdx !== -1) {
+            rs.insertColumnAfter(nomeIdx);
+            rs.getRange(1, nomeIdx + 1).setValue('Vaga')
+              .setFontWeight('bold').setBackground('#211551').setFontColor('white');
+            Logger.log('✅ ensureSheets: Coluna Vaga inserida após NomeCandidato.');
+          } else {
+            var vCol = rs.getLastColumn() + 1;
+            rs.getRange(1, vCol).setValue('Vaga')
+              .setFontWeight('bold').setBackground('#211551').setFontColor('white');
+            Logger.log('✅ ensureSheets: Coluna Vaga adicionada ao final.');
+          }
+        }
+
+        // Garante que a coluna Contratante exista no cabeçalho de Respostas
+        var hasContratante = rHeaders.some(function(h) {
+          var k = String(h || '').toLowerCase().trim();
+          return k === 'contratante' || k === 'registradopor' || k === 'cadastradopor';
+        });
+        if (!hasContratante) {
+          var vagaIdx = -1;
+          var curHeaders = rs.getRange(1, 1, 1, rs.getLastColumn()).getValues()[0];
+          for (var c4 = 0; c4 < curHeaders.length; c4++) {
+            var hVaga = String(curHeaders[c4] || '').toLowerCase().trim();
+            if (hVaga === 'vaga' || hVaga === 'cargo' || hVaga === 'função' || hVaga === 'funcao') {
+              vagaIdx = c4 + 1;
+              break;
+            }
+          }
+          if (vagaIdx !== -1) {
+            rs.insertColumnAfter(vagaIdx);
+            rs.getRange(1, vagaIdx + 1).setValue('Contratante')
+              .setFontWeight('bold').setBackground('#211551').setFontColor('white');
+            Logger.log('✅ ensureSheets: Coluna Contratante inserida após Vaga.');
+          } else {
+            var cCol = rs.getLastColumn() + 1;
+            rs.getRange(1, cCol).setValue('Contratante')
+              .setFontWeight('bold').setBackground('#211551').setFontColor('white');
+            Logger.log('✅ ensureSheets: Coluna Contratante adicionada ao final.');
+          }
+        }
+
         // Garante que a última coluna de Respostas tenha o cabeçalho PDFUrl
         var lastRHeader = String(rHeaders[lastCol - 1] || '').trim();
         if (!lastRHeader) {
           rs.getRange(1, lastCol).setValue('PDFUrl')
             .setFontWeight('bold').setBackground('#211551').setFontColor('white');
           Logger.log('✅ ensureSheets: Cabeçalho PDFUrl restaurado na última coluna de Respostas.');
+        }
+
+        // Melhorias de visualização e formatação na aba Respostas:
+        // 1. Congelar 3 primeiras colunas (Token, DataPreenchimento, NomeCandidato)
+        rs.setFrozenRows(1);
+        rs.setFrozenColumns(3);
+
+        // 2. Garantir formato de texto (@) nas colunas de CPF
+        var finalRHeaders = rs.getRange(1, 1, 1, rs.getLastColumn()).getValues()[0];
+        for (var idx = 0; idx < finalRHeaders.length; idx++) {
+          var hText = String(finalRHeaders[idx] || '').toUpperCase().trim();
+          if (hText === 'CPF' || hText === 'DEP1CPF' || hText === 'DEP2CPF') {
+            rs.getRange(2, idx + 1, Math.max(rs.getMaxRows() - 1, 1), 1).setNumberFormat('@');
+          }
         }
       }
     } catch(e) {
@@ -882,6 +970,71 @@ function deleteCandidate(token, secret) {
     }
   }
   return { error: 'Candidato não encontrado' };
+}
+
+// ============================================================
+// FUNÇÃO: Sincronizar Vaga e Contratante retroativamente em Respostas
+// Cruza as respostas existentes com a aba Candidatos e preenche
+// as colunas Vaga e Contratante onde estiverem vazias.
+// ============================================================
+function syncVagaEContratanteEmRespostas(secret) {
+  if (secret !== CONFIG.ADMIN_SECRET) return { error: 'Não autorizado' };
+  ensureSheets();
+
+  var ss = SpreadsheetApp.openById(CONFIG.SPREADSHEET_ID);
+  var cs = ss.getSheetByName(SHEET_CANDIDATES);
+  var rs = ss.getSheetByName(SHEET_RESPONSES);
+
+  var cData = cs.getDataRange().getValues();
+  var rData = rs.getDataRange().getValues();
+  if (rData.length <= 1) return { success: true, message: 'Nenhuma resposta para atualizar.' };
+
+  var candMap = {};
+  for (var i = 1; i < cData.length; i++) {
+    var tok = String(cData[i][4] || '').trim();
+    if (tok) {
+      candMap[tok] = {
+        vaga: cData[i][3] || '',
+        registradoPor: cData[i][9] || ''
+      };
+    }
+  }
+
+  var rHeaders = rData[0];
+  var vagaCol = -1;
+  var contratanteCol = -1;
+
+  for (var c = 0; c < rHeaders.length; c++) {
+    var h = String(rHeaders[c] || '').toLowerCase().trim();
+    if (h === 'vaga' || h === 'cargo' || h === 'função' || h === 'funcao') vagaCol = c + 1;
+    if (h === 'contratante' || h === 'registradopor' || h === 'cadastradopor') contratanteCol = c + 1;
+  }
+
+  var updatedVagas = 0;
+  var updatedContratantes = 0;
+
+  for (var r = 1; r < rData.length; r++) {
+    var token = String(rData[r][0] || '').trim();
+    var info = candMap[token];
+    if (info) {
+      if (vagaCol !== -1 && !rData[r][vagaCol - 1] && info.vaga) {
+        rs.getRange(r + 1, vagaCol).setValue(info.vaga);
+        updatedVagas++;
+      }
+      if (contratanteCol !== -1 && !rData[r][contratanteCol - 1] && info.registradoPor) {
+        rs.getRange(r + 1, contratanteCol).setValue(info.registradoPor);
+        updatedContratantes++;
+      }
+    }
+  }
+
+  SpreadsheetApp.flush();
+  return {
+    success: true,
+    updatedVagas: updatedVagas,
+    updatedContratantes: updatedContratantes,
+    message: 'Sincronização concluída! Vagas atualizadas: ' + updatedVagas + ' | Contratantes atualizados: ' + updatedContratantes
+  };
 }
 
 function cleanTestResponses(secret) {
