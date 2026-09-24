@@ -2301,16 +2301,8 @@ function applyFilters() {
 // ============================================================
 // RENDER TABELAS
 // ============================================================
-function statusBadge(s, token = '', nome = '', pdfUrl = '') {
-  if (s === 'Concluído') {
-    return `<div style="display:inline-flex;align-items:center;gap:6px;">
-      <span class="badge badge-done">Concluído</span>
-      ${token ? `<button type="button" onclick="event.stopPropagation(); generateCandidateLocalPDF('${esc(token)}', '${esc(nome)}', true)" title="Baixar PDF Oficial da Ficha" style="background:#f1f5f9;color:var(--navy);border:1.2px solid #cbd5e1;padding:2px 7px;border-radius:6px;font-size:11px;font-weight:700;display:inline-flex;align-items:center;gap:3px;cursor:pointer;line-height:1.2;transition:all .15s;" onmouseover="this.style.background='#e2e8f0';this.style.borderColor='var(--gold)'" onmouseout="this.style.background='#f1f5f9';this.style.borderColor='#cbd5e1'">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" width="11" height="11"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
-        PDF
-      </button>` : ''}
-    </div>`;
-  }
+function statusBadge(s) {
+  if (s === 'Concluído') return '<span class="badge badge-done">Concluído</span>';
   return '<span class="badge badge-pending">Pendente</span>';
 }
 
@@ -2378,7 +2370,7 @@ function renderRecentTable() {
       </td>
       <td><span class="td-funcao">${esc(funcao || 'N/A')}</span></td>
       <td>${getContractBadgeHtml(contrato) || '<span style="color:var(--text-3)">—</span>'}</td>
-      <td>${statusBadge(c.status, c.token, c.nome, c.pdfUrl)}</td>
+      <td>${statusBadge(c.status)}</td>
       <td class="td-date">${formatDisplayDate(c.dataEnvio)}</td>
       <td class="td-actions">${actionBtns(c)}</td>
     </tr>`;
@@ -2423,7 +2415,7 @@ function renderCandidatesTable() {
       </td>
       <td><span class="td-funcao">${esc(funcao || 'N/A')}</span></td>
       <td>${getContractBadgeHtml(contrato) || '<span style="color:var(--text-3)">—</span>'}</td>
-      <td>${statusBadge(c.status, c.token, c.nome, c.pdfUrl)}</td>
+      <td>${statusBadge(c.status)}</td>
       <td class="td-date">${formatDisplayDate(c.dataEnvio)}</td>
       <td class="td-date">${formatDisplayDate(c.dataPreenchimento)}</td>
       <td class="td-actions">${actionBtns(c)}</td>
