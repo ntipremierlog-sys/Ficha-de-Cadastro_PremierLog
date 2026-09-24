@@ -268,7 +268,13 @@
 
         const doValidateToken = async (retriesLeft = 3) => {
           try {
-            const res = await fetch(`${APPS_SCRIPT_URL}?action=validateToken&token=${tokenParam}`, { credentials: 'omit' });
+            const controller = new AbortController();
+            const timer = setTimeout(() => controller.abort(), 30000);
+            const res = await fetch(`${APPS_SCRIPT_URL}?action=validateToken&token=${tokenParam}`, {
+              credentials: 'omit',
+              signal: controller.signal
+            });
+            clearTimeout(timer);
             const data = await res.json();
             if (data.valid) {
               setVaga(data.vaga || '');
@@ -1070,48 +1076,34 @@
               return;
             }
 
-            // ── SUCESSO NA ETAPA 2: exibir tela de conclusão imediatamente ──
-            setIsFormSubmitted(true);
-
             // ================================================================
-            // ETAPA 3 — UPLOAD DO PDF AO GOOGLE DRIVE (SEGUNDO PLANO)
-            // Executada APÓS o sucesso da etapa 2. Não bloqueia a UX.
-            // Status já está Concluído. Se falhar, o admin pode gerar
-            // o PDF localmente pelo painel a qualquer momento.
+            // ETAPA 3 — UPLOAD DO PDF AO GOOGLE DRIVE
+            // Envia o PDF assinado ao Google Drive com timeout seguro.
+            // O usuário aguarda brevemente com status visível para garantir
+            // que o upload seja concluído antes de fechar a aba.
             // ================================================================
-            const MAX_RETRIES_PDF = 3;
-            (async () => {
-              for (let pdfAttempt = 1; pdfAttempt <= MAX_RETRIES_PDF; pdfAttempt++) {
-                try {
-                  console.log(`[ETAPA 3] Tentativa ${pdfAttempt}/${MAX_RETRIES_PDF} — enviando PDF ao Drive...`);
-                  setSubmitProgress(`Enviando PDF ao servidor... (${pdfAttempt}/${MAX_RETRIES_PDF})`);
-                  const pdfResponse = await fetchComTimeout(APPS_SCRIPT_URL, {
-                    method: 'POST',
-                    body: JSON.stringify({
-                      action: 'uploadPDF',
-                      token: token,
-                      pdfBase64: pdfBase64
-                    })
-                  }, 60000); // 60s para PDF (maior)
-                  const pdfResult = await pdfResponse.json();
-                  if (pdfResult.success && pdfResult.pdfUrl) {
-                    console.log('✅ [ETAPA 3] PDF salvo no Drive com sucesso:', pdfResult.pdfUrl);
-                    break; // PDF salvo — encerrar loop
-                  } else {
-                    console.warn(`[ETAPA 3] Tentativa ${pdfAttempt} retornou sem sucesso:`, pdfResult);
-                    if (pdfAttempt < MAX_RETRIES_PDF) {
-                      await new Promise(resolve => setTimeout(resolve, pdfAttempt * 2000));
-                    }
-                  }
-                } catch (pdfErr) {
-                  console.warn(`[ETAPA 3] Tentativa ${pdfAttempt} falhou (rede):`, pdfErr.message);
-                  if (pdfAttempt < MAX_RETRIES_PDF) {
-                    await new Promise(resolve => setTimeout(resolve, pdfAttempt * 2000));
-                  }
-                }
+            setSubmitProgress('Salvando cópia oficial do documento no servidor...');
+            try {
+              const pdfResponse = await fetchComTimeout(APPS_SCRIPT_URL, {
+                method: 'POST',
+                body: JSON.stringify({
+                  action: 'uploadPDF',
+                  token: token,
+                  pdfBase64: pdfBase64
+                })
+              }, 25000);
+              const pdfResult = await pdfResponse.json();
+              if (pdfResult.success && pdfResult.pdfUrl) {
+                console.log('✅ [ETAPA 3] PDF salvo no Drive com sucesso:', pdfResult.pdfUrl);
+              } else {
+                console.warn('[ETAPA 3] Retorno do upload sem pdfUrl:', pdfResult);
               }
-              console.log('[ETAPA 3] Processo de upload do PDF finalizado (com ou sem sucesso).');
-            })(); // IIFE assíncrona — executa em segundo plano sem bloquear a UI
+            } catch (pdfErr) {
+              console.warn('[ETAPA 3] Upload do PDF não finalizou a tempo (dados já gravados):', pdfErr.message);
+            }
+
+            // ── SUCESSO: exibir tela de conclusão com segurança ──
+            setIsFormSubmitted(true);
           }
 
           setSuccessMessage('Ficha cadastral gerada com sucesso! O download do PDF iniciou automaticamente.');

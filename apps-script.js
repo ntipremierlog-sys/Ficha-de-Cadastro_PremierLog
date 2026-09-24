@@ -204,18 +204,20 @@ function resendEmail(token, secret) {
 // ============================================================
 function validateToken(token) {
   if (!token) return { valid: false, reason: 'no_token', message: 'Token não fornecido.' };
-  ensureSheets();
 
   var ss    = SpreadsheetApp.openById(CONFIG.SPREADSHEET_ID);
   var sheet = ss.getSheetByName(SHEET_CANDIDATES);
+  if (!sheet) return { valid: false, reason: 'not_found', message: 'Base de dados não encontrada.' };
   var data  = sheet.getDataRange().getValues();
 
-  for (var i = 1; i < data.length; i++) {
-    if (data[i][4] === token) {
-      if (data[i][5] === 'Concluído') {
+  var reqToken = String(token || '').trim();
+  // Busca otimizada de trás para frente (candidatos recém-adicionados estão no final)
+  for (var i = data.length - 1; i >= 1; i--) {
+    if (String(data[i][4] || '').trim() === reqToken) {
+      if (String(data[i][5] || '').trim() === 'Concluído') {
         return { valid: false, reason: 'already_submitted', message: 'Este formulário já foi preenchido.' };
       }
-      return { valid: true, nome: data[i][1], vaga: data[i][3], token: token };
+      return { valid: true, nome: data[i][1], vaga: data[i][3], token: reqToken };
     }
   }
   return { valid: false, reason: 'not_found', message: 'Link inválido ou expirado.' };
@@ -226,10 +228,13 @@ function validateToken(token) {
 // ============================================================
 function getCandidates(secret) {
   if (secret !== CONFIG.ADMIN_SECRET) return { error: 'Não autorizado' };
-  ensureSheets();
 
   var ss    = SpreadsheetApp.openById(CONFIG.SPREADSHEET_ID);
   var sheet = ss.getSheetByName(SHEET_CANDIDATES);
+  if (!sheet) {
+    ensureSheets();
+    sheet = ss.getSheetByName(SHEET_CANDIDATES);
+  }
   var data  = sheet.getDataRange().getValues();
   var candidates = [];
 
@@ -723,10 +728,17 @@ function sendCandidateEmail(nome, email, token, vaga, formUrl) {
   GmailApp.sendEmail(email, CONFIG.EMAIL_SUBJECT, plain, { name: CONFIG.EMAIL_FROM_NAME, htmlBody: html });
 }
 
-function ensureSheets() {
+function ensureSheets(forceMigration) {
   var ss = SpreadsheetApp.openById(CONFIG.SPREADSHEET_ID);
 
   var cs = ss.getSheetByName(SHEET_CANDIDATES);
+  var rs = ss.getSheetByName(SHEET_RESPONSES);
+
+  // Retorno imediato de alta performance se as abas já existem e estão estruturadas
+  if (!forceMigration && cs && rs && cs.getLastRow() > 0 && rs.getLastRow() > 0) {
+    return;
+  }
+
   if (!cs) cs = ss.insertSheet(SHEET_CANDIDATES);
   if (cs.getLastRow() === 0) {
     // Planilha nova: criar cabeçalho completo incluindo RegistradoPor
@@ -946,10 +958,10 @@ function resetCandidateStatus(token, secret) {
 function deleteCandidate(token, secret) {
   if (secret !== CONFIG.ADMIN_SECRET) return { error: 'Não autorizado' };
   if (!token) return { error: 'Token obrigatório' };
-  ensureSheets();
 
   var ss    = SpreadsheetApp.openById(CONFIG.SPREADSHEET_ID);
   var sheet = ss.getSheetByName(SHEET_CANDIDATES);
+  if (!sheet) return { error: 'Planilha não encontrada' };
   var data  = sheet.getDataRange().getValues();
 
   for (var i = 1; i < data.length; i++) {
@@ -1108,13 +1120,14 @@ function cleanTestResponses(secret) {
 // ============================================================
 function syncStatuses(secret) {
   if (secret !== CONFIG.ADMIN_SECRET) return { error: 'Não autorizado' };
-  ensureSheets();
 
   var ss      = SpreadsheetApp.openById(CONFIG.SPREADSHEET_ID);
   var cSheet  = ss.getSheetByName(SHEET_CANDIDATES);
   var rSheet  = ss.getSheetByName(SHEET_RESPONSES);
+  if (!cSheet || !rSheet) return { error: 'Planilhas de controle não encontradas.' };
 
-  var cData   = cSheet.getDataRange().getValues();
+  var cRange  = cSheet.getDataRange();
+  var cData   = cRange.getValues();
   var rData   = rSheet.getDataRange().getValues();
 
   // Construir um mapa: token → { dataPreenchimento, pdfUrl } a partir das Respostas
@@ -1130,7 +1143,7 @@ function syncStatuses(secret) {
   var updated = 0;
   var skipped = 0;
 
-  // Percorrer candidatos e corrigir os que têm resposta mas estão Pendente
+  // Percorrer candidatos e corrigir em memória os que têm resposta mas estão Pendente
   for (var i = 1; i < cData.length; i++) {
     var candidateToken  = String(cData[i][4] || '').trim();
     var candidateStatus = String(cData[i][5] || '').trim();
@@ -1138,19 +1151,17 @@ function syncStatuses(secret) {
     if (!candidateToken) continue;
 
     if (responseMap[candidateToken]) {
-      // Há resposta para este token
       if (candidateStatus !== 'Concluído') {
-        // Marcar como Concluído
-        cSheet.getRange(i + 1, 6).setValue('Concluído');
+        cData[i][5] = 'Concluído';
 
         // Preencher data de preenchimento se estiver vazia
         if (!cData[i][7] && responseMap[candidateToken].date) {
-          cSheet.getRange(i + 1, 8).setValue(responseMap[candidateToken].date);
+          cData[i][7] = responseMap[candidateToken].date;
         }
 
         // Preencher PDF URL se estiver vazia
         if (!cData[i][8] && responseMap[candidateToken].pdf) {
-          cSheet.getRange(i + 1, 9).setValue(responseMap[candidateToken].pdf);
+          cData[i][8] = responseMap[candidateToken].pdf;
         }
 
         updated++;
@@ -1159,6 +1170,13 @@ function syncStatuses(secret) {
         skipped++; // Já estava Concluído — OK
       }
     }
+  }
+
+  // ✅ Grava tudo em uma ÚNICA chamada de setValues se houve alterações
+  if (updated > 0) {
+    cRange.setValues(cData);
+    SpreadsheetApp.flush();
+    Logger.log('✅ ' + updated + ' status gravados em lote com sucesso.');
   }
 
   return {
@@ -1184,10 +1202,11 @@ function bulkConcluirByDate(secret, dataLimite) {
   if (limiteParts.length !== 3) return { error: 'Formato de data inválido. Use YYYY-MM-DD' };
   var limiteDate = new Date(parseInt(limiteParts[0]), parseInt(limiteParts[1]) - 1, parseInt(limiteParts[2]), 23, 59, 59, 999);
 
-  ensureSheets();
   var ss     = SpreadsheetApp.openById(CONFIG.SPREADSHEET_ID);
   var cSheet = ss.getSheetByName(SHEET_CANDIDATES);
-  var cData  = cSheet.getDataRange().getValues();
+  if (!cSheet) return { error: 'Planilha de candidatos não encontrada.' };
+  var cRange = cSheet.getDataRange();
+  var cData  = cRange.getValues();
 
   var updated  = 0;
   var skipped  = 0;
@@ -1206,18 +1225,15 @@ function bulkConcluirByDate(secret, dataLimite) {
     if (dataEnvio instanceof Date) {
       envioDate = dataEnvio;
     } else if (typeof dataEnvio === 'string' && dataEnvio.trim() !== '') {
-      // Tentar parsear formatos comuns: 'dd/MM/yyyy HH:mm' ou ISO
       var iso = dataEnvio.trim();
       envioDate = new Date(iso);
       if (isNaN(envioDate.getTime())) {
-        // Tentar formato 'dd/MM/yyyy HH:mm'
         var match = iso.match(/^(\d{2})\/(\d{2})\/(\d{4})\s+(\d{2}):(\d{2})/);
         if (match) {
           envioDate = new Date(parseInt(match[3]), parseInt(match[2]) - 1, parseInt(match[1]), parseInt(match[4]), parseInt(match[5]));
         }
       }
     } else if (typeof dataEnvio === 'number') {
-      // Número serial do Google Sheets (dias desde 30/12/1899)
       envioDate = new Date((dataEnvio - 25569) * 86400 * 1000);
     }
 
@@ -1228,17 +1244,20 @@ function bulkConcluirByDate(secret, dataLimite) {
 
     // Verificar se dataEnvio <= dataLimite
     if (envioDate <= limiteDate) {
-      try {
-        cSheet.getRange(i + 1, 6).setValue('Concluído');
-        updated++;
-        updatedNames.push(cData[i][1] + ' (envio: ' + envioDate.toISOString().substring(0, 10) + ')');
-        Logger.log('✅ Marcado como Concluído: ' + cData[i][1] + ' | DataEnvio: ' + envioDate.toISOString());
-      } catch (err) {
-        errors.push('Linha ' + (i + 1) + ': ' + err.message);
-      }
+      cData[i][5] = 'Concluído';
+      updated++;
+      updatedNames.push(cData[i][1] + ' (envio: ' + envioDate.toISOString().substring(0, 10) + ')');
+      Logger.log('✅ Marcado como Concluído: ' + cData[i][1] + ' | DataEnvio: ' + envioDate.toISOString());
     } else {
       skipped++;
     }
+  }
+
+  // Grava em bloco se houver atualizações
+  if (updated > 0) {
+    cRange.setValues(cData);
+    SpreadsheetApp.flush();
+    Logger.log('✅ ' + updated + ' candidatos marcados como Concluído em bloco.');
   }
 
   return {

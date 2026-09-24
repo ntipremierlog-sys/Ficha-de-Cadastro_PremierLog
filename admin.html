@@ -577,6 +577,82 @@
     @keyframes shimmer { to { background-position: -200% 0; } }
 
     /* ===================================================
+       PAGINAÇÃO & CONTROLES
+    =================================================== */
+    .pagination-wrap {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 14px 20px;
+      background: #f8fafc;
+      border-top: 1px solid var(--border);
+      flex-wrap: wrap;
+      gap: 12px;
+      border-radius: 0 0 var(--radius) var(--radius);
+    }
+    .pagination-info {
+      font-size: 12.5px;
+      color: var(--text-2);
+      font-weight: 500;
+    }
+    .pagination-info strong {
+      color: var(--navy);
+      font-weight: 700;
+    }
+    .pagination-controls {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+    .pagination-btn {
+      padding: 5px 10px;
+      font-size: 12px;
+      font-weight: 600;
+      border-radius: 6px;
+      background: white;
+      border: 1px solid var(--border);
+      color: var(--text-2);
+      cursor: pointer;
+      transition: all 0.15s ease;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 32px;
+      height: 32px;
+    }
+    .pagination-btn:hover:not(:disabled) {
+      border-color: var(--navy);
+      color: var(--navy);
+      background: #f1f5f9;
+    }
+    .pagination-btn.active {
+      background: var(--navy);
+      color: white;
+      border-color: var(--navy);
+    }
+    .pagination-btn:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+    }
+    .pagination-size-wrap {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 12px;
+      color: var(--text-2);
+    }
+    .pagination-size-select {
+      padding: 5px 8px;
+      font-size: 12px;
+      font-weight: 600;
+      border-radius: 6px;
+      background: white;
+      border: 1px solid var(--border);
+      color: var(--text);
+      cursor: pointer;
+    }
+
+    /* ===================================================
        MODALS
     =================================================== */
     .modal-overlay {
@@ -882,8 +958,11 @@
             <span id="topbarSyncStatus">Sistema Ativo</span>
             <span class="topbar-sync-time" id="topbarSyncTime">• Sincronizado</span>
           </div>
-          <button class="btn-refresh" id="btnRefresh" onclick="loadCandidates()" title="Atualizar dados e sincronizar status">
+          <button class="btn-refresh" id="btnRefresh" onclick="loadCandidates(false)" title="Atualizar lista de candidatos">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.88"/></svg>
+          </button>
+          <button class="btn-refresh" id="btnManualSync" onclick="manualSyncStatuses()" title="Verificar e sincronizar status de preenchimento na planilha">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
           </button>
           <button class="btn-excel" onclick="openExportModal()" title="Exportar para Excel">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="16" y2="17"/></svg>
@@ -900,7 +979,7 @@
       <div id="backendStatusBanner" style="display:none; align-items:center; gap:12px; background:#fef2f2; border:1.5px solid #fca5a5; border-radius:10px; padding:12px 18px; margin:0 0 16px 0; color:#dc2626; font-size:13px; font-weight:500;">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20" style="flex-shrink:0;"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
         <span id="backendStatusMsg">Não foi possível conectar ao servidor. Verifique sua conexão ou aguarde alguns minutos.</span>
-        <button onclick="pingBackend()" style="margin-left:auto; padding:6px 14px; background:#dc2626; color:white; border-radius:6px; font-size:12px; font-weight:600; cursor:pointer; border:none;">Tentar Novamente</button>
+        <button onclick="loadCandidates(false)" style="margin-left:auto; padding:6px 14px; background:#dc2626; color:white; border-radius:6px; font-size:12px; font-weight:600; cursor:pointer; border:none;">Tentar Novamente</button>
       </div>
 
       <div class="content-scroll">
@@ -1052,7 +1131,7 @@
               <div class="filter-row">
                 <div class="search-box">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-                  <input type="text" id="searchInput" placeholder="Buscar por nome ou e-mail..." oninput="applyFilters()" />
+                  <input type="text" id="searchInput" placeholder="Buscar por nome ou e-mail..." oninput="onSearchInput()" />
                 </div>
                 <select class="filter-select" id="statusFilter" onchange="applyFilters()">
                   <option value="">Todos os status</option>
@@ -1095,6 +1174,7 @@
                 </tbody>
               </table>
             </div>
+            <div id="candidatesPagination" class="pagination-wrap"></div>
           </div>
         </div>
       </div><!-- /content-scroll -->
@@ -1351,15 +1431,71 @@ async function loadLogosFromIndex() {
 loadLogosFromIndex();
 
 // ============================================================
-// ESTADO
+// ESTADO & CACHE LOCAL (SWR - Stale While Revalidate)
 // ============================================================
+const CACHE_KEY = 'premier_candidates_cache_v2';
+const CACHE_TIME_KEY = 'premier_candidates_cache_time_v2';
+
 let state = {
   candidates: [],
   filtered: [],
   currentView: 'dashboard',
   pendingDelete: null,
-  lastGenLink: ''
+  lastGenLink: '',
+  currentPage: 1,
+  pageSize: 50
 };
+
+function loadFromCache() {
+  try {
+    const raw = localStorage.getItem(CACHE_KEY);
+    if (raw) {
+      const cached = JSON.parse(raw);
+      if (Array.isArray(cached) && cached.length > 0) {
+        state.candidates = cached;
+        updateStats();
+        populateFilters();
+        applyFilters();
+        renderRecentTable();
+        const cacheTime = localStorage.getItem(CACHE_TIME_KEY) || '';
+        const syncStatus = document.getElementById('topbarSyncStatus');
+        if (syncStatus) {
+          syncStatus.textContent = 'Dados em Cache';
+          syncStatus.style.color = '#3b82f6';
+        }
+        if (cacheTime) {
+          const el = document.getElementById('topbarSyncTime');
+          if (el) el.textContent = `• Cache ${cacheTime}`;
+        }
+        const badge = document.getElementById('sidebarBadge');
+        if (badge && state.candidates.length > 0) {
+          badge.textContent = state.candidates.length;
+          badge.style.display = 'inline-block';
+        }
+        console.log(`[Cache] ${cached.length} candidatos carregados instantaneamente do cache local.`);
+        return true;
+      }
+    }
+  } catch (e) {
+    console.warn('[Cache] Erro ao ler cache local:', e);
+  }
+  return false;
+}
+
+function saveToCache(candidates) {
+  try {
+    if (Array.isArray(candidates) && candidates.length > 0) {
+      localStorage.setItem(CACHE_KEY, JSON.stringify(candidates));
+      const now = new Date();
+      const pad = (n) => String(n).padStart(2, '0');
+      const timeStr = `${pad(now.getHours())}:${pad(now.getMinutes())}`;
+      localStorage.setItem(CACHE_TIME_KEY, timeStr);
+      console.log(`[Cache] ${candidates.length} candidatos salvos no cache local às ${timeStr}.`);
+    }
+  } catch (e) {
+    console.warn('[Cache] Erro ao salvar cache local:', e);
+  }
+}
 
 // ============================================================
 // LOGIN
@@ -1377,8 +1513,8 @@ function doLogin() {
       sessionStorage.setItem('rh_auth', '1');
       document.getElementById('loginPage').style.display = 'none';
       document.getElementById('app').style.display = 'block';
-      pingBackend(); // ✅ Verifica saúde do backend logo ao entrar
-      loadCandidates(true);
+      loadFromCache(); // ⚡ Exibição imediata em 0ms!
+      loadCandidates(false); // 🔄 Sincronização em segundo plano
       iniciarAutoRefresh();
     } else {
       btn.innerHTML = originalHtml;
@@ -1387,7 +1523,7 @@ function doLogin() {
       document.getElementById('loginPassword').value = '';
       document.getElementById('loginPassword').focus();
     }
-  }, 250);
+  }, 200);
 }
 function doLogout() {
   sessionStorage.removeItem('rh_auth');
@@ -1401,6 +1537,7 @@ document.getElementById('loginPassword').addEventListener('keydown', e => { if (
 if (sessionStorage.getItem('rh_auth') === '1') {
   document.getElementById('loginPage').style.display = 'none';
   document.getElementById('app').style.display = 'block';
+  loadFromCache();
 }
 
 // ============================================================
@@ -1507,6 +1644,25 @@ async function apiGet(params, maxRetries = 2) {
   throw lastErr;
 }
 
+async function apiPost(bodyObj, timeoutMs = 60000) {
+  if (!APPS_SCRIPT_URL || APPS_SCRIPT_URL.includes('COLE')) {
+    throw new Error('Apps Script URL não configurada');
+  }
+  const res = await fetchComTimeout(APPS_SCRIPT_URL, {
+    method: 'POST',
+    body: JSON.stringify(bodyObj)
+  }, timeoutMs);
+  const text = await res.text();
+  try {
+    return JSON.parse(text);
+  } catch (e) {
+    return { error: text };
+  }
+}
+
+// ============================================================
+// HEALTH CHECK — Testa conectividade com o backend
+// ============================================================
 // ============================================================
 // HEALTH CHECK — Testa conectividade com o backend
 // ============================================================
@@ -1516,7 +1672,8 @@ async function pingBackend() {
   try {
     const url = new URL(APPS_SCRIPT_URL);
     url.searchParams.set('action', 'ping');
-    const res = await fetchComTimeout(url.toString(), {}, 15000);
+    // Timeout de 35s para cobrir eventuais cold-starts do Apps Script
+    const res = await fetchComTimeout(url.toString(), {}, 35000);
     const contentType = (res.headers.get('content-type') || '').toLowerCase();
     const text = await res.text();
     let data;
@@ -1533,28 +1690,36 @@ async function pingBackend() {
       throw new Error('Resposta inesperada do servidor');
     }
   } catch (err) {
-    console.warn('[Ping] Backend indisponível:', err.message);
-    if (banner) {
+    console.warn('[Ping] Backend indisponível ou demorando:', err.message);
+    // Só exibe banner alarmante se não houver dados em tela (sem cache)
+    if (state.candidates.length === 0 && banner) {
       banner.style.display = 'flex';
       const msg = err.name === 'AbortError' || (err.message && err.message.includes('Tempo limite'))
-        ? '⏱️ O servidor demorou mais de 15s para responder. O sistema pode estar lento — tente recarregar.'
+        ? '⏱️ O servidor demorou para responder (cold start do Google). Tente recarregar em alguns instantes.'
         : '⚠️ Não foi possível conectar ao servidor (' + err.message + '). Verifique sua conexão ou aguarde alguns minutos.';
       banner.querySelector('#backendStatusMsg').textContent = msg;
     }
     const syncStatus = document.getElementById('topbarSyncStatus');
-    if (syncStatus) { syncStatus.textContent = 'Offline / Erro'; syncStatus.style.color = '#ef4444'; }
+    if (syncStatus) {
+      if (state.candidates.length > 0) {
+        syncStatus.textContent = 'Offline (Cache)';
+        syncStatus.style.color = '#f59e0b';
+      } else {
+        syncStatus.textContent = 'Offline / Erro';
+        syncStatus.style.color = '#ef4444';
+      }
+    }
   }
 }
 
 // ============================================================
 // CARREGAR CANDIDATOS
-// doSync=true: dispara syncStatuses em background após carregar
-//              (corrige candidatos que preencheram mas ficaram Pendente)
-// doSync=false: apenas recarrega a lista (usado pelo auto-refresh)
+// doSync=false por padrão: carregamento ultra-rápido sem travar
+// doSync=true: disparado apenas por ação explícita do RH
 // ============================================================
-async function loadCandidates(doSync = true) {
+async function loadCandidates(doSync = false) {
   const btn = document.getElementById('btnRefresh');
-  btn.classList.add('spinning');
+  if (btn) btn.classList.add('spinning');
 
   if (APPS_SCRIPT_URL.includes('COLE')) {
     // Modo Demo Fallback
@@ -1581,7 +1746,7 @@ async function loadCandidates(doSync = true) {
         badge.textContent = state.candidates.length;
         badge.style.display = 'inline-block';
       }
-      btn.classList.remove('spinning');
+      if (btn) btn.classList.remove('spinning');
     }, 400);
     return;
   }
@@ -1593,6 +1758,8 @@ async function loadCandidates(doSync = true) {
       return; 
     }
     state.candidates = data.candidates || [];
+    saveToCache(state.candidates); // 💾 Atualiza cache local instantâneo
+
     updateStats();
     populateFilters();
     applyFilters();
@@ -1604,29 +1771,76 @@ async function loadCandidates(doSync = true) {
       badge.textContent = state.candidates.length;
       badge.style.display = 'inline-block';
     }
-    const syncStatus = document.getElementById('topbarSyncStatus');
-    if (syncStatus) syncStatus.textContent = 'Sistema Ativo';
 
-    // Fix 2: Sync automático em background — corrige candidatos que
-    // preencheram a ficha mas ficaram como Pendente por timeout do Apps Script
+    // Limpa qualquer mensagem de erro do backendStatusBanner
+    const banner = document.getElementById('backendStatusBanner');
+    if (banner) banner.style.display = 'none';
+
+    const syncStatus = document.getElementById('topbarSyncStatus');
+    if (syncStatus) {
+      syncStatus.textContent = 'Sistema Ativo ✓';
+      syncStatus.style.color = '#10b981';
+    }
+
+    // Sync opcional explícito (apenas quando solicitado manualmente)
     if (doSync && !APPS_SCRIPT_URL.includes('COLE')) {
       apiGet({ action: 'syncStatuses' }).then(sync => {
         if (sync && sync.updated > 0) {
           showToast(`🔄 ${sync.updated} candidato(s) atualizados para Concluído`, 'success', 5000);
-          // Recarrega lista sem disparar novo sync (doSync=false)
           loadCandidates(false);
         }
-      }).catch(() => {}); // silencioso — não bloqueia o painel
+      }).catch(() => {});
     }
   } catch(e) {
     console.error('Erro na conexão com o Apps Script:', e);
-    if (!APPS_SCRIPT_URL.includes('COLE')) {
-      showToast('Falha na conexão: ' + (e.message || 'Verifique sua conexão ou tente recarregar.'), 'error');
+    
+    // Se temos dados locais no state/cache, mantém a UI funcionando sem desespero
+    if (state.candidates.length > 0) {
+      showToast('ℹ️ Conexão instável com o servidor. Exibindo dados locais sincronizados.', 'info', 4000);
+      const syncStatus = document.getElementById('topbarSyncStatus');
+      if (syncStatus) {
+        syncStatus.textContent = 'Offline (Cache)';
+        syncStatus.style.color = '#f59e0b';
+      }
+    } else {
+      if (!APPS_SCRIPT_URL.includes('COLE')) {
+        showToast('Falha na conexão: ' + (e.message || 'Verifique sua conexão ou tente recarregar.'), 'error');
+      }
+      const banner = document.getElementById('backendStatusBanner');
+      if (banner) {
+        banner.style.display = 'flex';
+        banner.querySelector('#backendStatusMsg').textContent = '⚠️ Não foi possível carregar os dados (' + (e.message || 'Erro de rede') + ').';
+      }
+      const syncStatus = document.getElementById('topbarSyncStatus');
+      if (syncStatus) {
+        syncStatus.textContent = 'Offline / Erro';
+        syncStatus.style.color = '#ef4444';
+      }
     }
-    const syncStatus = document.getElementById('topbarSyncStatus');
-    if (syncStatus) syncStatus.textContent = 'Offline / Erro';
   } finally {
-    btn.classList.remove('spinning');
+    if (btn) btn.classList.remove('spinning');
+  }
+}
+
+// ============================================================
+// SINCRONIZAÇÃO MANUAL DE STATUS (Acionada pelo botão do RH)
+// ============================================================
+async function manualSyncStatuses() {
+  const btn = document.getElementById('btnManualSync');
+  if (btn) btn.classList.add('spinning');
+  showToast('⏳ Verificando integridade das respostas na planilha...', 'info', 4000);
+  try {
+    const sync = await apiGet({ action: 'syncStatuses' }, 1);
+    if (sync && sync.updated > 0) {
+      showToast(`🔄 ${sync.updated} candidato(s) atualizados para Concluído!`, 'success', 5000);
+      await loadCandidates(false);
+    } else {
+      showToast('✅ Tudo certo! Todas as respostas já estão 100% sincronizadas.', 'success', 4000);
+    }
+  } catch (err) {
+    showToast('Falha na sincronização: ' + err.message, 'error', 5000);
+  } finally {
+    if (btn) btn.classList.remove('spinning');
   }
 }
 
@@ -2037,6 +2251,12 @@ function populateFilters() {
   }
 }
 
+let _searchDebounceTimer = null;
+function onSearchInput() {
+  clearTimeout(_searchDebounceTimer);
+  _searchDebounceTimer = setTimeout(applyFilters, 180);
+}
+
 function applyFilters() {
   const q              = (document.getElementById('searchInput').value || '').toLowerCase().trim();
   const stt            = document.getElementById('statusFilter').value;
@@ -2057,6 +2277,8 @@ function applyFilters() {
     
     return true;
   });
+
+  state.currentPage = 1; // Reseta para a primeira página após busca/filtro
 
   const isFiltered = q || stt || fFilter || cFilter || cadFilter;
   const countLabel = document.getElementById('candidateCountLabel');
@@ -2079,8 +2301,16 @@ function applyFilters() {
 // ============================================================
 // RENDER TABELAS
 // ============================================================
-function statusBadge(s) {
-  if (s === 'Concluído') return '<span class="badge badge-done">Concluído</span>';
+function statusBadge(s, token = '', nome = '', pdfUrl = '') {
+  if (s === 'Concluído') {
+    return `<div style="display:inline-flex;align-items:center;gap:6px;">
+      <span class="badge badge-done">Concluído</span>
+      ${token ? `<button type="button" onclick="event.stopPropagation(); generateCandidateLocalPDF('${esc(token)}', '${esc(nome)}', true)" title="Baixar PDF Oficial da Ficha" style="background:#f1f5f9;color:var(--navy);border:1.2px solid #cbd5e1;padding:2px 7px;border-radius:6px;font-size:11px;font-weight:700;display:inline-flex;align-items:center;gap:3px;cursor:pointer;line-height:1.2;transition:all .15s;" onmouseover="this.style.background='#e2e8f0';this.style.borderColor='var(--gold)'" onmouseout="this.style.background='#f1f5f9';this.style.borderColor='#cbd5e1'">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" width="11" height="11"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+        PDF
+      </button>` : ''}
+    </div>`;
+  }
   return '<span class="badge badge-pending">Pendente</span>';
 }
 
@@ -2148,7 +2378,7 @@ function renderRecentTable() {
       </td>
       <td><span class="td-funcao">${esc(funcao || 'N/A')}</span></td>
       <td>${getContractBadgeHtml(contrato) || '<span style="color:var(--text-3)">—</span>'}</td>
-      <td>${statusBadge(c.status)}</td>
+      <td>${statusBadge(c.status, c.token, c.nome, c.pdfUrl)}</td>
       <td class="td-date">${formatDisplayDate(c.dataEnvio)}</td>
       <td class="td-actions">${actionBtns(c)}</td>
     </tr>`;
@@ -2157,9 +2387,25 @@ function renderRecentTable() {
 
 function renderCandidatesTable() {
   const tbody = document.getElementById('candidatesTableBody');
+  if (!tbody) return;
   const list  = state.filtered;
-  if (!list.length) { tbody.innerHTML = '<tr><td colspan="7"><div class="empty-state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg><h4>Nenhum resultado</h4><p>Tente outros filtros de busca.</p></div></td></tr>'; return; }
-  tbody.innerHTML = list.map(c => {
+  if (!list.length) { 
+    tbody.innerHTML = '<tr><td colspan="7"><div class="empty-state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg><h4>Nenhum resultado</h4><p>Tente outros filtros de busca.</p></div></td></tr>'; 
+    renderPagination();
+    return; 
+  }
+
+  const pageSize = state.pageSize;
+  let pageList = list;
+  if (pageSize > 0) {
+    const totalPages = Math.ceil(list.length / pageSize) || 1;
+    if (state.currentPage > totalPages) state.currentPage = totalPages;
+    if (state.currentPage < 1) state.currentPage = 1;
+    const startIdx = (state.currentPage - 1) * pageSize;
+    pageList = list.slice(startIdx, startIdx + pageSize);
+  }
+
+  tbody.innerHTML = pageList.map(c => {
     const { funcao, contrato } = extractVagaParts(c.vaga);
     return `
     <tr>
@@ -2177,12 +2423,106 @@ function renderCandidatesTable() {
       </td>
       <td><span class="td-funcao">${esc(funcao || 'N/A')}</span></td>
       <td>${getContractBadgeHtml(contrato) || '<span style="color:var(--text-3)">—</span>'}</td>
-      <td>${statusBadge(c.status)}</td>
+      <td>${statusBadge(c.status, c.token, c.nome, c.pdfUrl)}</td>
       <td class="td-date">${formatDisplayDate(c.dataEnvio)}</td>
       <td class="td-date">${formatDisplayDate(c.dataPreenchimento)}</td>
       <td class="td-actions">${actionBtns(c)}</td>
     </tr>`;
   }).join('');
+
+  renderPagination();
+}
+
+function setPage(p) {
+  state.currentPage = p;
+  renderCandidatesTable();
+  const el = document.getElementById('viewCandidates');
+  if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function changePageSize(sz) {
+  state.pageSize = parseInt(sz, 10);
+  state.currentPage = 1;
+  renderCandidatesTable();
+}
+
+function renderPagination() {
+  const container = document.getElementById('candidatesPagination');
+  if (!container) return;
+  const total = state.filtered.length;
+  if (total === 0) {
+    container.style.display = 'none';
+    return;
+  }
+  container.style.display = 'flex';
+
+  const pageSize = state.pageSize;
+  if (pageSize === 0) {
+    container.innerHTML = `
+      <div class="pagination-info">
+        Exibindo todos os <strong>${total}</strong> candidatos
+      </div>
+      <div class="pagination-size-wrap">
+        <span>Por página:</span>
+        <select class="pagination-size-select" onchange="changePageSize(this.value)">
+          <option value="25">25</option>
+          <option value="50">50</option>
+          <option value="100">100</option>
+          <option value="0" selected>Todos (${total})</option>
+        </select>
+      </div>`;
+    return;
+  }
+
+  const totalPages = Math.ceil(total / pageSize) || 1;
+  const curr = state.currentPage;
+  const startItem = (curr - 1) * pageSize + 1;
+  const endItem = Math.min(curr * pageSize, total);
+
+  let pageButtonsHtml = '';
+  const maxButtons = 5;
+  let startP = Math.max(1, curr - Math.floor(maxButtons / 2));
+  let endP = Math.min(totalPages, startP + maxButtons - 1);
+  if (endP - startP + 1 < maxButtons) {
+    startP = Math.max(1, endP - maxButtons + 1);
+  }
+
+  if (curr > 1) {
+    pageButtonsHtml += `<button class="pagination-btn" onclick="setPage(1)" title="Primeira página">«</button>`;
+    pageButtonsHtml += `<button class="pagination-btn" onclick="setPage(${curr - 1})" title="Página anterior">‹</button>`;
+  } else {
+    pageButtonsHtml += `<button class="pagination-btn" disabled>«</button>`;
+    pageButtonsHtml += `<button class="pagination-btn" disabled>‹</button>`;
+  }
+
+  for (let p = startP; p <= endP; p++) {
+    pageButtonsHtml += `<button class="pagination-btn ${p === curr ? 'active' : ''}" onclick="setPage(${p})">${p}</button>`;
+  }
+
+  if (curr < totalPages) {
+    pageButtonsHtml += `<button class="pagination-btn" onclick="setPage(${curr + 1})" title="Próxima página">›</button>`;
+    pageButtonsHtml += `<button class="pagination-btn" onclick="setPage(${totalPages})" title="Última página">»</button>`;
+  } else {
+    pageButtonsHtml += `<button class="pagination-btn" disabled>›</button>`;
+    pageButtonsHtml += `<button class="pagination-btn" disabled>»</button>`;
+  }
+
+  container.innerHTML = `
+    <div class="pagination-info">
+      Mostrando <strong>${startItem}</strong> a <strong>${endItem}</strong> de <strong>${total}</strong> candidatos
+    </div>
+    <div class="pagination-controls">
+      ${pageButtonsHtml}
+    </div>
+    <div class="pagination-size-wrap">
+      <span>Por página:</span>
+      <select class="pagination-size-select" onchange="changePageSize(this.value)">
+        <option value="25" ${pageSize === 25 ? 'selected' : ''}>25</option>
+        <option value="50" ${pageSize === 50 ? 'selected' : ''}>50</option>
+        <option value="100" ${pageSize === 100 ? 'selected' : ''}>100</option>
+        <option value="0" ${pageSize === 0 ? 'selected' : ''}>Todos</option>
+      </select>
+    </div>`;
 }
 
 function actionBtns(c) {
@@ -2242,7 +2582,7 @@ function handleAction(selectEl, token, nome, pdfUrl) {
       }
       break;
     case 'generateLocalPdf':
-      generateCandidateLocalPDF(token, nome);
+      generateCandidateLocalPDF(token, nome, true);
       feedbackText = "📥 Gerando PDF...";
       break;
     case 'delete':
@@ -2283,7 +2623,7 @@ async function resendMail(token, nome) {
   } catch(e) { showToast('Erro ao enviar e-mail.', 'error'); }
 }
 
-async function generateCandidateLocalPDF(token, nome) {
+async function generateCandidateLocalPDF(token, nome, forceLocal = false) {
   showToast('Carregando PDF oficial do candidato...', 'info');
   try {
     if (APPS_SCRIPT_URL.includes('COLE')) {
@@ -2293,8 +2633,8 @@ async function generateCandidateLocalPDF(token, nome) {
 
     const cand = state.candidates.find(c => c.token === token);
     
-    // Se o candidato já possui o PDF original salvo no Google Drive com a assinatura exata do formulário:
-    if (cand && cand.pdfUrl) {
+    // Se o candidato já possui o PDF original salvo no Google Drive e não foi solicitado download local:
+    if (!forceLocal && cand && cand.pdfUrl) {
       window.open(cand.pdfUrl, '_blank', 'noopener,noreferrer');
       showToast('📄 Abrindo PDF oficial assinado...', 'success');
       return;
@@ -2308,14 +2648,16 @@ async function generateCandidateLocalPDF(token, nome) {
     }
 
     const r = data.response || {};
-    if (r.pdfUrl) {
+    if (!forceLocal && r.pdfUrl) {
+      if (cand) cand.pdfUrl = r.pdfUrl;
       window.open(r.pdfUrl, '_blank', 'noopener,noreferrer');
       showToast('📄 Abrindo PDF oficial assinado...', 'success');
       return;
     }
 
     showToast('📄 Gerando PDF oficial a partir dos dados cadastrados...', 'info', 4000);
-    const vaga = cand ? cand.vaga : '';
+    const vaga = cand ? (cand.vaga || '') : (r.Vaga || r.Cargo || '');
+    const { funcao, contrato } = extractVagaParts(vaga);
     const vagaLower = (vaga || '').toLowerCase();
     const hasHealthPlan = vagaLower.includes('1268') || vagaLower.includes('158') || vagaLower.includes('salvador') || vagaLower.includes('teca');
     const isSorocabaVinhedo = vagaLower.includes('sorocaba') || vagaLower.includes('vinhedo');
@@ -2455,7 +2797,8 @@ async function generateCandidateLocalPDF(token, nome) {
     // 1. Header (Logo + Company text)
     if (LOGO_PDF_BASE64) {
       try {
-        doc.addImage(LOGO_PDF_BASE64, 'JPEG', marginX, y, 22, 15.8);
+        const logoFormat = LOGO_PDF_BASE64.startsWith('data:image/jpeg') ? 'JPEG' : 'PNG';
+        doc.addImage(LOGO_PDF_BASE64, logoFormat, marginX, y, 22, 15.8);
       } catch (err) {
         console.error("Error drawing logo in PDF:", err);
       }
@@ -2790,11 +3133,33 @@ async function generateCandidateLocalPDF(token, nome) {
     doc.text("ASSINATURA DO FUNCIONÁRIO" + (formData.tipoAssinatura === 'desenho' ? " (ASSINADO NA TELA)" : " (ASSINATURA DIGITAL)"), marginX + printableWidth / 2, y + 4.5, { align: "center" });
 
     // Download PDF locally in the browser
-    const cleanName = formData.nomeCompleto.trim().replace(/\s+/g, '_').slice(0, 30);
+    const cleanName = (formData.nomeCompleto || nome || 'Candidato').trim().replace(/\s+/g, '_').slice(0, 30);
     const fileName = `Ficha_Cadastro_${cleanName}.pdf`;
     doc.save(fileName);
     
     showToast('✅ PDF baixado com sucesso!', 'success');
+
+    // Se o candidato ainda não tem link no Drive, faz o upload em background para reparar permanentemente
+    if (!cand || !cand.pdfUrl) {
+      try {
+        const pdfBase64 = doc.output('datauristring');
+        apiPost({
+          action: 'uploadPDF',
+          token: token,
+          pdfBase64: pdfBase64
+        }).then(res => {
+          if (res && res.success && res.pdfUrl) {
+            if (cand) cand.pdfUrl = res.pdfUrl;
+            renderCandidatesTable();
+            showToast('☁️ Cópia salva no Google Drive permanentemente!', 'success', 5000);
+          }
+        }).catch(err => {
+          console.warn('[uploadPDF] Sincronização em segundo plano não completada:', err);
+        });
+      } catch (e) {
+        console.warn('Erro ao obter datauristring do PDF:', e);
+      }
+    }
   } catch(e) {
     console.error('Erro na geração do PDF local:', e);
     showToast('Erro ao gerar o PDF local: ' + e.message, 'error');
@@ -2846,15 +3211,21 @@ async function viewDetails(token, nome) {
     const footer = document.getElementById('detailsModalFooter');
     footer.innerHTML = '<button class="btn-cancel" onclick="closeModal(\'detailsModal\')">Fechar</button>';
     if (pdfUrl) {
-      footer.innerHTML += `<a class="btn-download-pdf" href="${esc(pdfUrl)}" target="_blank" rel="noopener">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
-        📎 Abrir PDF da Ficha
-      </a>`;
+      footer.innerHTML += `
+        <a class="btn-download-pdf" href="${esc(pdfUrl)}" target="_blank" rel="noopener">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+          📎 Abrir PDF (Drive)
+        </a>
+        <button class="btn-download-pdf" onclick="generateCandidateLocalPDF('${esc(token)}', '${esc(nome)}', true)" style="background:var(--navy);border-color:var(--navy);color:#fff;">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          📥 Baixar PDF Local
+        </button>`;
     } else {
-      footer.innerHTML += `<button class="btn-download-pdf" onclick="generateCandidateLocalPDF('${esc(token)}', '${esc(nome)}')">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
-        📥 Gerar / Baixar PDF da Ficha
-      </button>`;
+      footer.innerHTML += `
+        <button class="btn-download-pdf" onclick="generateCandidateLocalPDF('${esc(token)}', '${esc(nome)}', true)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+          📥 Gerar / Baixar PDF Oficial
+        </button>`;
     }
 
     document.getElementById('detailsModalBody').innerHTML = `
@@ -2866,7 +3237,20 @@ async function viewDetails(token, nome) {
           <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#9f1239;margin-bottom:2px;">PDF Oficial no Google Drive</div>
           <a href="${esc(pdfUrl)}" target="_blank" rel="noopener" style="font-size:12.5px;color:#be123c;font-weight:600;text-decoration:underline;word-break:break-all;">Abrir documento salvo ↗</a>
         </div>
-      </div>` : ''}
+      </div>` : `<div style="background:linear-gradient(135deg,#f0fdf4,#dcfce7);border:1.5px solid #bbf7d0;border-radius:12px;padding:12px 16px;margin-bottom:16px;display:flex;align-items:center;justify-content:space-between;gap:12px;">
+        <div style="display:flex;align-items:center;gap:12px;">
+          <div style="width:36px;height:36px;border-radius:8px;background:rgba(22,101,52,0.1);display:flex;align-items:center;justify-content:center;color:#166534;flex-shrink:0;">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+          </div>
+          <div>
+            <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#166534;margin-bottom:2px;">Ficha Concluída — PDF Disponível para Download</div>
+            <div style="font-size:12px;color:#15803d;">Você pode baixar o arquivo PDF completo ou salvá-lo no Google Drive.</div>
+          </div>
+        </div>
+        <button onclick="generateCandidateLocalPDF('${esc(token)}', '${esc(nome)}', true)" style="background:#16a34a;color:white;border:none;padding:8px 14px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:6px;flex-shrink:0;">
+          📥 Baixar PDF
+        </button>
+      </div>`}
 
       <div class="details-container">
         <!-- Card 1: Identificação Pessoal -->
@@ -3516,22 +3900,43 @@ function showToast(msg, type = 'info', dur = 3500) {
 }
 
 // ============================================================
-// AUTO-REFRESH a cada 2 minutos
-// Usa doSync=true para corrigir status indevidos automaticamente
+// AUTO-REFRESH INTELIGENTE
+// - Intervalo equilibrado de 3.5 minutos
+// - Não executa se a aba estiver em segundo plano (economiza cota do Google)
+// - Apenas recarrega a lista sem disparar syncStatuses pesado (doSync=false)
+// - Ao retornar para a aba após > 3min, atualiza automaticamente
 // ============================================================
 let _autoRefreshTimer = null;
+let _lastSyncTimestamp = Date.now();
+
 function iniciarAutoRefresh() {
   if (_autoRefreshTimer) clearInterval(_autoRefreshTimer);
   _autoRefreshTimer = setInterval(() => {
     if (sessionStorage.getItem('rh_auth') === '1') {
-      loadCandidates(true); // com syncStatuses em background
+      if (document.hidden) return; // Não gasta recursos se a aba estiver em segundo plano
+      loadCandidates(false);
+      _lastSyncTimestamp = Date.now();
     }
-  }, 2 * 60 * 1000); // 2 minutos
+  }, 3.5 * 60 * 1000); // 3.5 minutos
+
+  if (!window._visibilityListenerAdded) {
+    window._visibilityListenerAdded = true;
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden && sessionStorage.getItem('rh_auth') === '1') {
+        const elapsedMinutes = (Date.now() - _lastSyncTimestamp) / (1000 * 60);
+        if (elapsedMinutes >= 3) {
+          loadCandidates(false);
+          _lastSyncTimestamp = Date.now();
+        }
+      }
+    });
+  }
 }
 
-// Inicializar se já logado
+// Inicializar se já logado: lê do cache primeiro (0ms) e sincroniza em background
 if (sessionStorage.getItem('rh_auth') === '1') {
-  loadCandidates(true);
+  loadFromCache();
+  loadCandidates(false);
   iniciarAutoRefresh();
 }
 </script>
